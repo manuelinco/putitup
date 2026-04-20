@@ -6,8 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, Medal, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const DEMO_USER_ID = 1;
+import { useAuth } from "@/contexts/auth";
 
 const levelColors: Record<string, string> = {
   expert: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",
@@ -22,6 +21,8 @@ type Period = "daily" | "weekly" | "allTime";
 export default function Leaderboard() {
   const [period, setPeriod] = useState<Period>("allTime");
   const { data: entries, isLoading } = useGetLeaderboard({ period, limit: 50 });
+  const { user: authUser } = useAuth();
+  const currentUserId = authUser?.id;
 
   return (
     <Layout>
@@ -111,7 +112,7 @@ export default function Leaderboard() {
                   </div>
                 ))
               : entries?.map((entry) => {
-                  const isCurrentUser = entry.userId === DEMO_USER_ID;
+                  const isCurrentUser = entry.userId === currentUserId;
                   return (
                     <div
                       key={entry.userId}

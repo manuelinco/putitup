@@ -1,66 +1,83 @@
-import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Gamepad2, LayoutDashboard, Trophy, Database, User, Settings, Zap } from "lucide-react";
+import { Gamepad2, LayoutDashboard, Trophy, Database, User, Zap, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useGetUser } from "@workspace/api-client-react";
+import { useAuth } from "@/contexts/auth";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  // Using a hardcoded user ID 1 for demo purposes
-  const { data: user } = useGetUser(1, { query: { enabled: true } });
+  const { user } = useAuth();
 
   const navItems = [
     { href: "/", label: "Home", icon: LayoutDashboard },
     { href: "/tasks", label: "Tasks", icon: Gamepad2 },
-    { href: "/leaderboard", label: "Rankings", icon: Trophy },
-    { href: "/datasets", label: "Datasets", icon: Database },
-    { href: "/profile/1", label: "Profile", icon: User },
+    { href: "/leaderboard", label: "Top", icon: Trophy },
+    { href: "/datasets", label: "Dati", icon: Database },
+    { href: user ? `/profile/${user.id}` : "/profile/0", label: "Profilo", icon: User },
   ];
 
   return (
-    <div className="flex min-h-[100dvh] bg-background text-foreground w-full max-w-[480px] mx-auto relative border-x border-border shadow-2xl">
-      {/* Mobile-first app shell */}
+    <div className="flex min-h-[100dvh] bg-background text-foreground w-full max-w-[480px] mx-auto relative border-x border-border/30 shadow-2xl">
       <div className="flex flex-col w-full">
         {/* Header */}
-        <header className="sticky top-0 z-50 flex items-center justify-between p-4 bg-background/80 backdrop-blur-md border-b border-border">
+        <header className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 bg-background/80 backdrop-blur-md border-b border-border/30">
           <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-primary" />
-            <span className="font-bold text-lg tracking-tight uppercase">IA Games</span>
+            <div className="relative">
+              <Zap className="w-5 h-5 text-primary drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+            </div>
+            <span className="font-black text-base tracking-tight uppercase bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              IA Games
+            </span>
           </div>
           {user && (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary/10 border border-secondary/20">
-                <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-                <span className="text-xs font-bold text-secondary">{user.points}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/10 border border-secondary/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                <span className="text-xs font-black text-secondary">{user.points.toLocaleString()}</span>
+                <span className="text-[9px] text-muted-foreground">pts</span>
               </div>
+              {user.isAdmin && (
+                <Link href="/admin">
+                  <button className="p-1.5 rounded-lg bg-muted/40 hover:bg-muted transition-colors">
+                    <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                </Link>
+              )}
             </div>
           )}
         </header>
 
-        {/* Main Content */}
+        {/* Main */}
         <main className="flex-1 pb-20 overflow-y-auto">
           {children}
         </main>
 
         {/* Bottom Nav */}
-        <nav className="fixed bottom-0 w-full max-w-[480px] bg-background/90 backdrop-blur-md border-t border-border z-50">
-          <div className="flex items-center justify-around p-2">
+        <nav className="fixed bottom-0 w-full max-w-[480px] bg-background/95 backdrop-blur-md border-t border-border/30 z-50">
+          <div className="flex items-center justify-around py-1.5 px-2">
             {navItems.map((item) => {
-              const isActive = location === item.href;
+              const isActive = item.href === "/"
+                ? location === "/"
+                : location.startsWith(item.href);
               const Icon = item.icon;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex flex-col items-center justify-center w-16 h-14 gap-1 rounded-xl transition-all duration-200",
-                    isActive 
-                      ? "text-primary bg-primary/10" 
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    "flex flex-col items-center justify-center w-14 h-12 gap-0.5 rounded-xl transition-all duration-200 relative",
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <Icon className={cn("w-5 h-5", isActive && "drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]")} />
-                  <span className="text-[10px] font-medium">{item.label}</span>
+                  {isActive && (
+                    <span className="absolute inset-0 rounded-xl bg-primary/10 border border-primary/20" />
+                  )}
+                  <Icon className={cn(
+                    "w-4.5 h-4.5 relative",
+                    isActive && "drop-shadow-[0_0_6px_rgba(168,85,247,0.9)]"
+                  )} />
+                  <span className="text-[9px] font-bold uppercase tracking-wide relative">{item.label}</span>
                 </Link>
               );
             })}

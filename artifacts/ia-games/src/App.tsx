@@ -1,7 +1,11 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TonConnectUIProvider } from "@tonconnect/ui-react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/contexts/auth";
+import { LoginScreen } from "@/components/login-screen";
+import { NicknameModal } from "@/components/nickname-modal";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Tasks from "@/pages/tasks";
@@ -35,16 +39,45 @@ function Router() {
   );
 }
 
+function AppInner() {
+  const { user, isLoading, needsNickname } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user && !needsNickname) {
+    return <LoginScreen />;
+  }
+
+  return (
+    <>
+      {needsNickname && <NicknameModal />}
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Router />
+      </WouterRouter>
+      <Toaster />
+    </>
+  );
+}
+
+const TON_MANIFEST_URL = `${window.location.origin}${import.meta.env.BASE_URL}tonconnect-manifest.json`;
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <TonConnectUIProvider manifestUrl={TON_MANIFEST_URL}>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            <AppInner />
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </TonConnectUIProvider>
   );
 }
 

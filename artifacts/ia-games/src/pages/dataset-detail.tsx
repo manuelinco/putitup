@@ -9,12 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Star, Play, Lock, Database, ChevronLeft, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-
-const DEMO_USER_ID = 1;
+import { useAuth } from "@/contexts/auth";
 
 export default function DatasetDetail() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id ?? "0", 10);
+  const { user } = useAuth();
+  const userId = user?.id ?? 0;
   const { data: dataset, isLoading } = useGetDataset(id, { query: { enabled: !!id } });
   const downloadDataset = useDownloadDataset();
   const watchAd = useWatchAd();
@@ -23,12 +24,12 @@ export default function DatasetDetail() {
 
   const handleDownload = async (method: "free" | "ads" | "stripe") => {
     if (!dataset) return;
-    await downloadDataset.mutateAsync({ id: dataset.id, data: { userId: DEMO_USER_ID, paymentMethod: method } });
+    await downloadDataset.mutateAsync({ id: dataset.id, data: { userId, paymentMethod: method } });
     setDownloaded(true);
   };
 
   const handleWatchAd = async () => {
-    await watchAd.mutateAsync({ data: { userId: DEMO_USER_ID, adType: "unlock", datasetId: dataset?.id } });
+    await watchAd.mutateAsync({ data: { userId, adType: "unlock", datasetId: dataset?.id } });
     setAdsWatched((p) => p + 1);
   };
 

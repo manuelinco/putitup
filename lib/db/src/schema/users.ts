@@ -6,6 +6,7 @@ import {
   integer,
   real,
   pgEnum,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -14,8 +15,9 @@ export const userLevelEnum = pgEnum("user_level", ["base", "pro", "expert"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
-  telegramId: text("telegram_id").notNull().unique(),
-  username: text("username").notNull(),
+  telegramId: text("telegram_id").unique(),
+  walletAddress: text("wallet_address").unique(),
+  username: text("username").notNull().unique(),
   score: real("score").notNull().default(100),
   level: userLevelEnum("level").notNull().default("base"),
   points: integer("points").notNull().default(0),
@@ -23,8 +25,8 @@ export const usersTable = pgTable("users", {
   maxEnergy: integer("max_energy").notNull().default(100),
   xp: integer("xp").notNull().default(0),
   streak: integer("streak").notNull().default(0),
-  walletAddress: text("wallet_address"),
   avatarUrl: text("avatar_url"),
+  isAdmin: boolean("is_admin").notNull().default(false),
   lastTaskAt: timestamp("last_task_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

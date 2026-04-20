@@ -280,13 +280,28 @@
   }
 
   /* Neon glow utility */
-  .glow-primary {
-    box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+  .glow-primary { box-shadow: 0 0 20px rgba(168, 85, 247, 0.4); }
+  .glow-secondary { box-shadow: 0 0 20px rgba(74, 222, 128, 0.4); }
+  .glow-accent { box-shadow: 0 0 20px rgba(56, 189, 248, 0.4); }
+
+  /* Mini-game animations */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-8px); }
+    40%       { transform: translateX(8px); }
+    60%       { transform: translateX(-6px); }
+    80%       { transform: translateX(6px); }
   }
-  .glow-secondary {
-    box-shadow: 0 0 20px rgba(74, 222, 128, 0.4);
+  .animate-shake { animation: shake 0.5s ease-in-out; }
+
+  @keyframes bounce-once {
+    0%, 100% { transform: translateY(0); }
+    30%      { transform: translateY(-8px); }
+    60%      { transform: translateY(-4px); }
   }
-  .glow-accent {
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
-  }
+  .animate-bounce-once { animation: bounce-once 0.6s ease-in-out; }
+
+  /* Hide scrollbar */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }

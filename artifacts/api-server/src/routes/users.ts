@@ -1,9 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, or } from "drizzle-orm";
 import { db, usersTable, taskResponsesTable, adsTrackingTable } from "@workspace/db";
 import {
   ListUsersQueryParams,
-  CreateUserBody,
   GetUserParams,
   UpdateUserParams,
   UpdateUserBody,
@@ -34,25 +33,72 @@ router.get("/users", async (req, res): Promise<void> => {
 });
 
 router.post("/users", async (req, res): Promise<void> => {
-  const parsed = CreateUserBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const { username, telegramId, walletAddress, avatarUrl } = req.body ?? {};
+
+  if (!username || typeof username !== "string" || username.length < 3 || username.length > 20) {
+    res.status(400).json({ error: "Username must be 3-20 characters" });
+    return;
+  }
+  if (!telegramId && !walletAddress) {
+    res.status(400).json({ error: "telegramId or walletAddress is required" });
     return;
   }
 
-  const existing = await db
+  // Check for existing user by telegramId or walletAddress
+  const conditions = [];
+  if (telegramId) conditions.push(eq(usersTable.telegramId, String(telegramId)));
+  if (walletAddress) conditions.push(eq(usersTable.walletAddress, String(walletAddress)));
+
+  if (conditions.length > 0) {
+    const existing = await db
+      .select()
+      .from(usersTable)
+      .where(or(...conditions))
+      .limit(1);
+
+    if (existing.length > 0) {
+      res.status(201).json(existing[0]);
+      return;
+    }
+  }
+
+  const [user] = await db.insert(usersTable).values({
+    username: String(username),
+    telegramId: telegramId ? String(telegramId) : null,
+    walletAddress: walletAddress ? String(walletAddress) : null,
+    avatarUrl: avatarUrl ? String(avatarUrl) : null,
+  }).returning();
+  res.status(201).json(user);
+});
+
+router.get("/users/check-username/:username", async (req, res): Promise<void> => {
+  const { username } = req.params;
+  if (!username || username.length < 3 || username.length > 20) {
+    res.json({ available: false, reason: "Username must be 3-20 characters" });
+    return;
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    res.json({ available: false, reason: "Only letters, numbers, underscores" });
+    return;
+  }
+  const [existing] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.username, username));
+  res.json({ available: !existing });
+});
+
+router.get("/users/by-wallet/:walletAddress", async (req, res): Promise<void> => {
+  const { walletAddress } = req.params;
+  const [user] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.telegramId, parsed.data.telegramId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    res.status(201).json(existing[0]);
+    .where(eq(usersTable.walletAddress, walletAddress));
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
     return;
   }
-
-  const [user] = await db.insert(usersTable).values(parsed.data).returning();
-  res.status(201).json(user);
+  res.json(user);
 });
 
 router.get("/users/by-telegram/:telegramId", async (req, res): Promise<void> => {
