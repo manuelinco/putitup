@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "IA Games Ultimate"
+version = "1.0.0"
+id = "artifacts/ia-games"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18294
+
+[services.development]
+run = "pnpm --filter @workspace/ia-games run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ia-games", "run", "build" ]
+publicDir = "artifacts/ia-games/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18294"
+BASE_PATH = "/"

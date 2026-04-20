@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: IA Games Ultimate - Data Labeling Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User management
+  - name: tasks
+    description: Data labeling tasks
+  - name: responses
+    description: Task responses
+  - name: datasets
+    description: Dataset catalog
+  - name: ads
+    description: Ads system
+  - name: rewards
+    description: Rewards and points
+  - name: leaderboard
+    description: Rankings and leaderboard
+  - name: analytics
+    description: Platform analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +39,640 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Users ───────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [base, pro, expert]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create or register a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}/stats:
+    get:
+      operationId: getUserStats
+      tags: [users]
+      summary: Get user stats (accuracy, tasks done, streaks, energy)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+  /users/by-telegram/{telegramId}:
+    get:
+      operationId: getUserByTelegram
+      tags: [users]
+      summary: Get user by Telegram ID
+      parameters:
+        - name: telegramId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+  # ── Tasks ────────────────────────────────────────────
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [image, text, classification]
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a new task (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskBody"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get a task by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Not found
+
+  /tasks/next:
+    get:
+      operationId: getNextTask
+      tags: [tasks]
+      summary: Get the next available task for a user
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Next task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: No tasks available
+
+  /tasks/stats:
+    get:
+      operationId: getTaskStats
+      tags: [tasks]
+      summary: Aggregated task stats
+      responses:
+        "200":
+          description: Task statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskStats"
+
+  # ── Responses ─────────────────────────────────────────
+  /responses:
+    get:
+      operationId: listResponses
+      tags: [responses]
+      summary: List task responses
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: taskId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of responses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskResponse"
+    post:
+      operationId: submitResponse
+      tags: [responses]
+      summary: Submit a task response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitResponseBody"
+      responses:
+        "201":
+          description: Response submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmitResponseResult"
+
+  /responses/{id}:
+    get:
+      operationId: getResponse
+      tags: [responses]
+      summary: Get a response by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Response found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "404":
+          description: Not found
+
+  # ── Datasets ─────────────────────────────────────────
+  /datasets:
+    get:
+      operationId: listDatasets
+      tags: [datasets]
+      summary: List datasets
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: accessType
+          in: query
+          schema:
+            type: string
+            enum: [free, ads, premium]
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of datasets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Dataset"
+    post:
+      operationId: createDataset
+      tags: [datasets]
+      summary: Create a new dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDatasetBody"
+      responses:
+        "201":
+          description: Dataset created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dataset"
+
+  /datasets/{id}:
+    get:
+      operationId: getDataset
+      tags: [datasets]
+      summary: Get a dataset by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dataset found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dataset"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateDataset
+      tags: [datasets]
+      summary: Update dataset metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDatasetBody"
+      responses:
+        "200":
+          description: Dataset updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dataset"
+
+  /datasets/{id}/download:
+    post:
+      operationId: downloadDataset
+      tags: [datasets]
+      summary: Record a dataset download (increments download count)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DownloadDatasetBody"
+      responses:
+        "200":
+          description: Download recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dataset"
+
+  /datasets/featured:
+    get:
+      operationId: getFeaturedDatasets
+      tags: [datasets]
+      summary: Get top featured/trending datasets
+      responses:
+        "200":
+          description: Featured datasets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Dataset"
+
+  /datasets/categories:
+    get:
+      operationId: getDatasetCategories
+      tags: [datasets]
+      summary: Get all unique dataset categories with counts
+      responses:
+        "200":
+          description: Categories list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryCount"
+
+  # ── Ads ──────────────────────────────────────────────
+  /ads/watch:
+    post:
+      operationId: watchAd
+      tags: [ads]
+      summary: Record an ad view and reward the user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchAdBody"
+      responses:
+        "200":
+          description: Ad recorded, reward granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchAdResult"
+
+  /ads/tracking/{userId}:
+    get:
+      operationId: getAdTracking
+      tags: [ads]
+      summary: Get ad tracking data for a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ad tracking info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdTracking"
+
+  # ── Rewards ──────────────────────────────────────────
+  /rewards/convert:
+    post:
+      operationId: convertPoints
+      tags: [rewards]
+      summary: Convert points to TON (request payout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvertPointsBody"
+      responses:
+        "200":
+          description: Conversion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConvertPointsResult"
+
+  /rewards/missions/{userId}:
+    get:
+      operationId: getDailyMissions
+      tags: [rewards]
+      summary: Get daily missions for a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Daily missions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyMission"
+
+  /rewards/energy/recharge:
+    post:
+      operationId: rechargeEnergy
+      tags: [rewards]
+      summary: Recharge user energy (via ad or time)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RechargeEnergyBody"
+      responses:
+        "200":
+          description: Energy recharged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+
+  # ── Leaderboard ───────────────────────────────────────
+  /leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [leaderboard]
+      summary: Get global leaderboard
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, allTime]
+            default: allTime
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  # ── Analytics ─────────────────────────────────────────
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Platform-wide analytics summary
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/activity:
+    get:
+      operationId: getRecentActivity
+      tags: [analytics]
+      summary: Recent platform activity feed
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Activity events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityEvent"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +680,514 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ── User ──────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        telegramId:
+          type: string
+        username:
+          type: string
+        score:
+          type: number
+          description: Accuracy score 0-100
+        level:
+          type: string
+          enum: [base, pro, expert]
+        points:
+          type: integer
+        energy:
+          type: integer
+        maxEnergy:
+          type: integer
+        xp:
+          type: integer
+        streak:
+          type: integer
+        walletAddress:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, telegramId, username, score, level, points, energy, maxEnergy, xp, streak, createdAt]
+
+    CreateUserBody:
+      type: object
+      properties:
+        telegramId:
+          type: string
+        username:
+          type: string
+        walletAddress:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+      required: [telegramId, username]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        username:
+          type: string
+        walletAddress:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+
+    UserStats:
+      type: object
+      properties:
+        userId:
+          type: integer
+        tasksCompleted:
+          type: integer
+        tasksCorrect:
+          type: integer
+        accuracyRate:
+          type: number
+        currentStreak:
+          type: integer
+        energy:
+          type: integer
+        maxEnergy:
+          type: integer
+        xp:
+          type: integer
+        level:
+          type: string
+          enum: [base, pro, expert]
+        points:
+          type: integer
+        adsWatchedToday:
+          type: integer
+        dailyTasksDone:
+          type: integer
+      required: [userId, tasksCompleted, tasksCorrect, accuracyRate, currentStreak, energy, maxEnergy, xp, level, points, adsWatchedToday, dailyTasksDone]
+
+    # ── Task ──────────────────────────────────────────
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [image, text, classification]
+        dataPayload:
+          type: object
+          description: Task content (image URL, text, or options)
+        correctAnswer:
+          type: ["string", "null"]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        pointsReward:
+          type: integer
+        isGolden:
+          type: boolean
+          description: Golden dataset task with known answer
+        consensusCount:
+          type: integer
+          description: How many responses collected so far
+        finalLabel:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, type, dataPayload, difficulty, pointsReward, isGolden, consensusCount, createdAt]
+
+    CreateTaskBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [image, text, classification]
+        dataPayload:
+          type: object
+        correctAnswer:
+          type: ["string", "null"]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        pointsReward:
+          type: integer
+          default: 10
+        isGolden:
+          type: boolean
+          default: false
+      required: [type, dataPayload, difficulty]
+
+    TaskStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        byType:
+          type: object
+          properties:
+            image:
+              type: integer
+            text:
+              type: integer
+            classification:
+              type: integer
+          required: [image, text, classification]
+        byDifficulty:
+          type: object
+          properties:
+            easy:
+              type: integer
+            medium:
+              type: integer
+            hard:
+              type: integer
+          required: [easy, medium, hard]
+        goldenCount:
+          type: integer
+        completionRate:
+          type: number
+      required: [total, byType, byDifficulty, goldenCount, completionRate]
+
+    # ── Task Responses ─────────────────────────────────
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        taskId:
+          type: integer
+        answer:
+          type: string
+        isCorrect:
+          type: ["boolean", "null"]
+        responseTimeMs:
+          type: integer
+        pointsEarned:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, userId, taskId, answer, responseTimeMs, pointsEarned, createdAt]
+
+    SubmitResponseBody:
+      type: object
+      properties:
+        userId:
+          type: integer
+        taskId:
+          type: integer
+        answer:
+          type: string
+        responseTimeMs:
+          type: integer
+      required: [userId, taskId, answer, responseTimeMs]
+
+    SubmitResponseResult:
+      type: object
+      properties:
+        response:
+          $ref: "#/components/schemas/TaskResponse"
+        pointsEarned:
+          type: integer
+        xpEarned:
+          type: integer
+        accuracyBonus:
+          type: boolean
+        newLevel:
+          type: ["string", "null"]
+        streakBonus:
+          type: boolean
+      required: [response, pointsEarned, xpEarned, accuracyBonus, streakBonus]
+
+    # ── Datasets ──────────────────────────────────────
+    Dataset:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        qualityScore:
+          type: number
+        accessType:
+          type: string
+          enum: [free, ads, premium]
+        price:
+          type: ["number", "null"]
+        adsRequired:
+          type: ["integer", "null"]
+        downloadCount:
+          type: integer
+        size:
+          type: ["string", "null"]
+        recordCount:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, description, category, qualityScore, accessType, downloadCount, tags, createdAt]
+
+    CreateDatasetBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        qualityScore:
+          type: number
+          default: 0
+        accessType:
+          type: string
+          enum: [free, ads, premium]
+        price:
+          type: ["number", "null"]
+        adsRequired:
+          type: ["integer", "null"]
+        size:
+          type: ["string", "null"]
+        recordCount:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+      required: [name, description, category, accessType]
+
+    UpdateDatasetBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        qualityScore:
+          type: number
+        accessType:
+          type: string
+          enum: [free, ads, premium]
+        price:
+          type: ["number", "null"]
+        adsRequired:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+
+    DownloadDatasetBody:
+      type: object
+      properties:
+        userId:
+          type: ["integer", "null"]
+        paymentMethod:
+          type: string
+          enum: [free, ads, stripe]
+      required: [paymentMethod]
+
+    CategoryCount:
+      type: object
+      properties:
+        category:
+          type: string
+        count:
+          type: integer
+      required: [category, count]
+
+    # ── Ads ──────────────────────────────────────────
+    WatchAdBody:
+      type: object
+      properties:
+        userId:
+          type: integer
+        adType:
+          type: string
+          enum: [rewarded, unlock]
+        datasetId:
+          type: ["integer", "null"]
+      required: [userId, adType]
+
+    WatchAdResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        energyRestored:
+          type: integer
+        pointsEarned:
+          type: integer
+        datasetUnlocked:
+          type: boolean
+        adsWatchedToday:
+          type: integer
+        dailyCapReached:
+          type: boolean
+      required: [success, energyRestored, pointsEarned, datasetUnlocked, adsWatchedToday, dailyCapReached]
+
+    AdTracking:
+      type: object
+      properties:
+        userId:
+          type: integer
+        adsWatchedToday:
+          type: integer
+        totalAdsWatched:
+          type: integer
+        lastViewTime:
+          type: ["string", "null"]
+          format: date-time
+        dailyCap:
+          type: integer
+        dailyCapReached:
+          type: boolean
+      required: [userId, adsWatchedToday, totalAdsWatched, dailyCap, dailyCapReached]
+
+    # ── Rewards ──────────────────────────────────────
+    ConvertPointsBody:
+      type: object
+      properties:
+        userId:
+          type: integer
+        points:
+          type: integer
+      required: [userId, points]
+
+    ConvertPointsResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        pointsConverted:
+          type: integer
+        tonAmount:
+          type: number
+        remainingPoints:
+          type: integer
+        message:
+          type: string
+      required: [success, pointsConverted, tonAmount, remainingPoints, message]
+
+    DailyMission:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [tasks, accuracy, streak, ads]
+        target:
+          type: integer
+        current:
+          type: integer
+        reward:
+          type: integer
+        completed:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+      required: [id, title, description, type, target, current, reward, completed, expiresAt]
+
+    RechargeEnergyBody:
+      type: object
+      properties:
+        userId:
+          type: integer
+        method:
+          type: string
+          enum: [ad, time]
+      required: [userId, method]
+
+    # ── Leaderboard ───────────────────────────────────
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        userId:
+          type: integer
+        username:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        points:
+          type: integer
+        level:
+          type: string
+          enum: [base, pro, expert]
+        score:
+          type: number
+        tasksCompleted:
+          type: integer
+      required: [rank, userId, username, points, level, score, tasksCompleted]
+
+    # ── Analytics ─────────────────────────────────────
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        activeUsersToday:
+          type: integer
+        totalTasks:
+          type: integer
+        tasksCompletedToday:
+          type: integer
+        averageAccuracy:
+          type: number
+        totalDatasets:
+          type: integer
+        totalDownloads:
+          type: integer
+        platformQualityScore:
+          type: number
+        adsServedToday:
+          type: integer
+        tonPaidOut:
+          type: number
+      required: [totalUsers, activeUsersToday, totalTasks, tasksCompletedToday, averageAccuracy, totalDatasets, totalDownloads, platformQualityScore, adsServedToday, tonPaidOut]
+
+    ActivityEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [task_completed, level_up, dataset_downloaded, payout, streak_achieved, mission_completed]
+        userId:
+          type: integer
+        username:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, type, userId, username, description, createdAt]
