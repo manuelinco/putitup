@@ -41,6 +41,12 @@ function Router() {
 
 function AppInner() {
   const { user, isLoading, needsNickname } = useAuth();
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const currentPath = window.location.pathname.replace(basePath, "") || "/";
+  const protectedPath = currentPath.startsWith("/tasks")
+    || currentPath.startsWith("/profile")
+    || currentPath.startsWith("/leaderboard")
+    || currentPath.startsWith("/admin");
 
   if (isLoading) {
     return (
@@ -50,7 +56,7 @@ function AppInner() {
     );
   }
 
-  if (!user && !needsNickname) {
+  if (!user && !needsNickname && protectedPath) {
     return <LoginScreen />;
   }
 

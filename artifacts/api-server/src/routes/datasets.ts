@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, ilike, and } from "drizzle-orm";
-import { db, datasetsTable, activityEventsTable, usersTable } from "@workspace/db";
+import { db, datasetsTable, activityEventsTable, usersTable, tasksTable } from "@workspace/db";
 import {
   ListDatasetsQueryParams,
   CreateDatasetBody,
@@ -58,17 +58,126 @@ router.get("/datasets", async (req, res): Promise<void> => {
 });
 
 router.post("/datasets", async (req, res): Promise<void> => {
-  const parsed = CreateDatasetBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const {
+    name,
+    description,
+    category,
+    accessType = "ads",
+    qualityScore = 0,
+    price = null,
+    adsRequired = 5,
+    tokenCost = 10,
+    workflowMode = "consensus",
+    votesRequired = 3,
+    consensusThreshold = 0.8,
+    supervisorId = null,
+    importMode = "manual",
+    requestedTaskCount = 0,
+    tags = [],
+  } = req.body ?? {};
+
+  if (!name || !description || !category) {
+    res.status(400).json({ error: "name, description and category are required" });
     return;
   }
 
   const [dataset] = await db
     .insert(datasetsTable)
-    .values(parsed.data)
+    .values({
+      name: String(name),
+      description: String(description),
+      category: String(category),
+      accessType,
+      qualityScore: Number(qualityScore),
+      price: price === null || price === "" ? null : Number(price),
+      adsRequired: Number(adsRequired),
+      tokenCost: Number(tokenCost),
+      workflowMode: String(workflowMode),
+      status: "active",
+      votesRequired: Number(votesRequired),
+      consensusThreshold: Number(consensusThreshold),
+      supervisorId: supervisorId ? Number(supervisorId) : null,
+      importMode: String(importMode),
+      requestedTaskCount: Number(requestedTaskCount),
+      tags: Array.isArray(tags) ? tags.map(String) : [],
+    })
     .returning();
   res.status(201).json(dataset);
+});
+
+router.post("/datasets/:id/generate-tasks", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const { count = 25, type = "image", prompt, options } = req.body ?? {};
+  const safeCount = Math.min(Math.max(Number(count) || 1, 1), 1000);
+
+  const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, id));
+  if (!dataset) {
+    res.status(404).json({ error: "Dataset not found" });
+    return;
+  }
+
+  const labels = Array.isArray(options) && options.length > 1 ? options.map(String) : ["cat", "dog", "car", "person"];
+  const rows = Array.from({ length: safeCount }, (_, index) => {
+    const label = labels[index % labels.length];
+    const question = prompt || (type === "image" ? "What is visible in this image?" : "Choose the best label for this item");
+    return {
+      datasetId: dataset.id,
+      type,
+      dataPayload: {
+        question,
+        text: type === "text" ? `Sample text ${dataset.id}-${Date.now()}-${index}: classify this content as ${label} or another label.` : undefined,
+        imageUrl: type === "image" ? `https://picsum.photos/seed/ia-${dataset.id}-${Date.now()}-${index}/640/420` : undefined,
+        options: labels,
+        source: "admin_generator",
+        generatedIndex: index,
+      },
+      difficulty: "easy",
+      pointsReward: 10,
+      requiredVotes: dataset.votesRequired,
+      consensusThreshold: dataset.consensusThreshold,
+      supervisorId: dataset.supervisorId,
+      taskValuePoints: 10,
+      operatorRewardTon: 0.00001,
+      supervisorRewardTon: 0.0001,
+      rawSource: "admin_generator",
+    };
+  });
+
+  const created = await db.insert(tasksTable).values(rows).returning();
+  await db.update(datasetsTable).set({
+    requestedTaskCount: dataset.requestedTaskCount + safeCount,
+    recordCount: (dataset.recordCount ?? 0) + safeCount,
+  }).where(eq(datasetsTable.id, dataset.id));
+
+  res.status(201).json({ created: created.length, requested: Number(count), cappedAt: safeCount, datasetId: dataset.id });
+});
+
+router.post("/datasets/nightly-publish", async (_req, res): Promise<void> => {
+  const datasets = await db.select().from(datasetsTable);
+  const now = new Date();
+  const results = [];
+
+  for (const dataset of datasets) {
+    const approved = await db
+      .select()
+      .from(tasksTable)
+      .where(and(eq(tasksTable.datasetId, dataset.id), eq(tasksTable.status, "approved")));
+
+    const qualityScore = dataset.requestedTaskCount > 0
+      ? Math.min(99.9, Math.round((approved.length / dataset.requestedTaskCount) * 1000) / 10)
+      : dataset.qualityScore;
+
+    const [updated] = await db.update(datasetsTable).set({
+      approvedRecordCount: approved.length,
+      qualityScore,
+      status: approved.length > 0 ? "published" : dataset.status,
+      nightlyPublishedAt: now,
+    }).where(eq(datasetsTable.id, dataset.id)).returning();
+
+    results.push({ datasetId: dataset.id, approvedRecords: approved.length, status: updated.status });
+  }
+
+  res.json({ publishedAt: now, results });
 });
 
 router.get("/datasets/:id", async (req, res): Promise<void> => {

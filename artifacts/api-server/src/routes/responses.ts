@@ -6,6 +6,7 @@ import {
   tasksTable,
   usersTable,
   activityEventsTable,
+  datasetsTable,
 } from "@workspace/db";
 import {
   ListResponsesQueryParams,
@@ -85,6 +86,8 @@ router.post("/responses", async (req, res): Promise<void> => {
     isCorrect =
       answer.trim().toLowerCase() ===
       task.correctAnswer.trim().toLowerCase();
+  } else {
+    isCorrect = true;
   }
 
   const basePts = task.pointsReward;
@@ -104,6 +107,61 @@ router.post("/responses", async (req, res): Promise<void> => {
       pointsEarned,
     })
     .returning();
+
+  const taskResponses = await db
+    .select()
+    .from(taskResponsesTable)
+    .where(eq(taskResponsesTable.taskId, taskId));
+
+  const answerCounts = new Map<string, number>();
+  for (const item of taskResponses) {
+    const normalized = item.answer.trim().toLowerCase();
+    answerCounts.set(normalized, (answerCounts.get(normalized) ?? 0) + 1);
+  }
+
+  const sortedAnswers = [...answerCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const topAnswer = sortedAnswers[0];
+  const totalVotes = taskResponses.length;
+  const ratio = topAnswer && totalVotes > 0 ? topAnswer[1] / totalVotes : 0;
+  const consensusReached = totalVotes >= task.requiredVotes && ratio >= task.consensusThreshold;
+
+  let consensusUpdate: Partial<typeof tasksTable.$inferInsert> = {
+    consensusCount: totalVotes,
+  };
+
+  if (consensusReached && task.reviewStage === "labeling") {
+    let nextStatus = "pending_admin";
+    let nextStage = "admin_review";
+    let approvedAt: Date | null = null;
+    let adminApprovedAt: Date | null = null;
+
+    if (task.datasetId) {
+      const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, task.datasetId));
+      if (dataset?.workflowMode === "consensus") {
+        nextStatus = "approved";
+        nextStage = "published";
+        approvedAt = new Date();
+        adminApprovedAt = approvedAt;
+      } else if (dataset?.workflowMode === "supervisor_admin" || task.supervisorId) {
+        nextStatus = "pending_supervisor";
+        nextStage = "supervisor_review";
+      }
+    } else if (!task.supervisorId) {
+      nextStatus = "approved";
+      nextStage = "published";
+      approvedAt = new Date();
+      adminApprovedAt = approvedAt;
+    }
+
+    consensusUpdate = {
+      ...consensusUpdate,
+      finalLabel: topAnswer?.[0] ?? answer,
+      status: nextStatus,
+      reviewStage: nextStage,
+      approvedAt,
+      adminApprovedAt,
+    };
+  }
 
   const newXp = user.xp + xpEarned;
   const newLevel = computeLevel(newXp);
@@ -142,9 +200,7 @@ router.post("/responses", async (req, res): Promise<void> => {
 
   await db
     .update(tasksTable)
-    .set({
-      consensusCount: task.consensusCount + 1,
-    })
+    .set(consensusUpdate)
     .where(eq(tasksTable.id, taskId));
 
   await db.insert(activityEventsTable).values({

@@ -27,6 +27,12 @@ export const usersTable = pgTable("users", {
   streak: integer("streak").notNull().default(0),
   avatarUrl: text("avatar_url"),
   isAdmin: boolean("is_admin").notNull().default(false),
+  isSupervisor: boolean("is_supervisor").notNull().default(false),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
+  address: text("address"),
+  company: text("company"),
   lastTaskAt: timestamp("last_task_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

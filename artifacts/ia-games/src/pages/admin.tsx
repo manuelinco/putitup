@@ -17,6 +17,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Settings, Users, Database, Target, TrendingUp, Plus, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+async function apiFetch(path: string, options?: RequestInit) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);
+  return data;
+}
+
 export default function Admin() {
   const { data: analytics, isLoading: analyticsLoading } = useGetAnalyticsSummary();
   const { data: taskStats } = useGetTaskStats();
@@ -43,8 +55,16 @@ export default function Admin() {
     name: "",
     description: "",
     category: "",
-    accessType: "free" as "free" | "ads" | "premium",
+    accessType: "ads" as "free" | "ads" | "premium",
     qualityScore: 90,
+    workflowMode: "supervisor_admin",
+    votesRequired: 100,
+    consensusThreshold: 0.99,
+    tokenCost: 10,
+    adsRequired: 5,
+    price: 49.99,
+    taskCount: 50,
+    taskType: "image" as "image" | "text" | "classification",
   });
   const [taskCreated, setTaskCreated] = useState(false);
   const [datasetCreated, setDatasetCreated] = useState(false);
@@ -71,19 +91,42 @@ export default function Admin() {
   };
 
   const handleCreateDataset = async () => {
-    await createDataset.mutateAsync({
-      data: {
+    const dataset = await apiFetch("/api/datasets", {
+      method: "POST",
+      body: JSON.stringify({
         name: datasetForm.name,
         description: datasetForm.description,
         category: datasetForm.category,
         accessType: datasetForm.accessType,
         qualityScore: datasetForm.qualityScore,
-        tags: [],
-      },
+        workflowMode: datasetForm.workflowMode,
+        votesRequired: datasetForm.votesRequired,
+        consensusThreshold: datasetForm.consensusThreshold,
+        tokenCost: datasetForm.tokenCost,
+        adsRequired: datasetForm.adsRequired,
+        price: datasetForm.price,
+        requestedTaskCount: datasetForm.taskCount,
+        importMode: "admin_generator",
+        tags: ["consensus", datasetForm.workflowMode],
+      }),
     });
+    if (datasetForm.taskCount > 0) {
+      await apiFetch(`/api/datasets/${dataset.id}/generate-tasks`, {
+        method: "POST",
+        body: JSON.stringify({
+          count: datasetForm.taskCount,
+          type: datasetForm.taskType,
+          options: datasetForm.taskType === "image" ? ["cat", "dog", "car", "person"] : ["positive", "negative", "neutral", "spam"],
+        }),
+      });
+    }
     setDatasetCreated(true);
     setShowDatasetForm(false);
     setTimeout(() => setDatasetCreated(false), 3000);
+  };
+
+  const handleNightlyPublish = async () => {
+    await apiFetch("/api/datasets/nightly-publish", { method: "POST" });
   };
 
   return (
@@ -93,6 +136,9 @@ export default function Admin() {
         <div className="flex items-center gap-2 pt-2">
           <Settings className="w-5 h-5 text-primary" />
           <h1 className="text-xl font-black">Admin Panel</h1>
+          <Button size="sm" variant="outline" className="ml-auto text-xs" onClick={handleNightlyPublish}>
+            Nightly Publish
+          </Button>
         </div>
 
         {/* Analytics Overview */}
@@ -279,6 +325,79 @@ export default function Admin() {
                   <option value="ads">Unlock with Ads</option>
                   <option value="premium">Premium (Paid)</option>
                 </select>
+                <select
+                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                  value={datasetForm.workflowMode}
+                  onChange={(e) => setDatasetForm({ ...datasetForm, workflowMode: e.target.value })}
+                >
+                  <option value="consensus">Consensus only</option>
+                  <option value="supervisor_admin">Consensus + Supervisor + Admin</option>
+                  <option value="admin">Consensus + Admin</option>
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                    type="number"
+                    placeholder="Votes required"
+                    value={datasetForm.votesRequired}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, votesRequired: Number(e.target.value) })}
+                  />
+                  <input
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                    placeholder="Consensus threshold"
+                    value={datasetForm.consensusThreshold}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, consensusThreshold: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                    type="number"
+                    placeholder="Token cost"
+                    value={datasetForm.tokenCost}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, tokenCost: Number(e.target.value) })}
+                  />
+                  <input
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                    type="number"
+                    placeholder="Ads req."
+                    value={datasetForm.adsRequired}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, adsRequired: Number(e.target.value) })}
+                  />
+                  <input
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                    type="number"
+                    step="0.01"
+                    placeholder="Fee"
+                    value={datasetForm.price}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, price: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                    value={datasetForm.taskType}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, taskType: e.target.value as any })}
+                  >
+                    <option value="image">Image tasks</option>
+                    <option value="text">Text tasks</option>
+                    <option value="classification">Classification tasks</option>
+                  </select>
+                  <input
+                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                    type="number"
+                    placeholder="Tasks to generate"
+                    value={datasetForm.taskCount}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, taskCount: Number(e.target.value) })}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  For very large runs, create the campaign here and add tasks in batches from upload/API/import. Each batch can become consensus work for Telegram players.
+                </p>
                 <div className="flex gap-2">
                   <Button
                     size="sm"

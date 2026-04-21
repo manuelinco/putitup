@@ -4,3 +4,6 @@ export * from "./taskResponses";
 export * from "./datasets";
 export * from "./adsTracking";
 export * from "./activityEvents";
+export * from "./clients";
+export * from "./datasetAccess";
+export * from "./rewardLedger";

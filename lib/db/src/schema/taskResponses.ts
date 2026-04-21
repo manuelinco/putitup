@@ -5,6 +5,7 @@ import {
   timestamp,
   integer,
   boolean,
+  real,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -23,6 +24,8 @@ export const taskResponsesTable = pgTable("task_responses", {
   isCorrect: boolean("is_correct"),
   responseTimeMs: integer("response_time_ms").notNull().default(0),
   pointsEarned: integer("points_earned").notNull().default(0),
+  rewardTon: real("reward_ton").notNull().default(0),
+  rewardStatus: text("reward_status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

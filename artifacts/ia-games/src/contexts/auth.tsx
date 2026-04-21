@@ -26,6 +26,7 @@ interface AuthContextValue {
   needsNickname: boolean;
   pendingWallet: string | null;
   pendingTelegramId: string | null;
+  wallet: ReturnType<typeof useTonWallet>;
   connectWallet: () => void;
   disconnectWallet: () => void;
   completeRegistration: (username: string) => Promise<void>;
@@ -122,6 +123,12 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       if (tgUser) {
         const u = await apiFetch(`/api/users/by-telegram/${tgUser.id}`);
         if (u) {
+          if (!(u as AuthUser).walletAddress) {
+            setPendingTelegramId(tgUser.id);
+            setInitialized(true);
+            setIsLoading(false);
+            return;
+          }
           setUser(u as AuthUser);
           setSource("telegram");
           saveSession(u.id, "telegram");
@@ -131,7 +138,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         }
         // New Telegram user
         setPendingTelegramId(tgUser.id);
-        setNeedsNickname(true);
+        setNeedsNickname(false);
         setInitialized(true);
         setIsLoading(false);
         return;
@@ -184,6 +191,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   }, [tonConnectUI]);
 
   const completeRegistration = useCallback(async (username: string) => {
+    if (!pendingWallet) throw new Error("Wallet richiesto");
     const body: Record<string, unknown> = { username };
     if (pendingWallet) body.walletAddress = pendingWallet;
     if (pendingTelegramId) body.telegramId = pendingTelegramId;
@@ -213,7 +221,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, source, isLoading, needsNickname,
-      pendingWallet, pendingTelegramId,
+      pendingWallet, pendingTelegramId, wallet,
       connectWallet, disconnectWallet,
       completeRegistration, refreshUser, logout,
     }}>
