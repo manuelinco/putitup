@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth";
 import { LoginScreen } from "@/components/login-screen";
 import { NicknameModal } from "@/components/nickname-modal";
+import { useTelegramInit } from "@/hooks/useTelegram";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Tasks from "@/pages/tasks";
@@ -14,6 +15,7 @@ import Datasets from "@/pages/datasets";
 import DatasetDetail from "@/pages/dataset-detail";
 import Profile from "@/pages/profile";
 import Admin from "@/pages/admin";
+import Supervisor from "@/pages/supervisor";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +36,7 @@ function Router() {
       <Route path="/datasets/:id" component={DatasetDetail} />
       <Route path="/profile/:id" component={Profile} />
       <Route path="/admin" component={Admin} />
+      <Route path="/supervisor" component={Supervisor} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -41,12 +44,16 @@ function Router() {
 
 function AppInner() {
   const { user, isLoading, needsNickname } = useAuth();
+
+  useTelegramInit();
+
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const currentPath = window.location.pathname.replace(basePath, "") || "/";
   const protectedPath = currentPath.startsWith("/tasks")
     || currentPath.startsWith("/profile")
     || currentPath.startsWith("/leaderboard")
-    || currentPath.startsWith("/admin");
+    || currentPath.startsWith("/admin")
+    || currentPath.startsWith("/supervisor");
 
   if (isLoading) {
     return (

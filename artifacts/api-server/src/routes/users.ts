@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, or } from "drizzle-orm";
-import { db, usersTable, taskResponsesTable, adsTrackingTable } from "@workspace/db";
+import { db, usersTable, taskResponsesTable, adsTrackingTable, rewardLedgerTable } from "@workspace/db";
 import {
   ListUsersQueryParams,
   GetUserParams,
@@ -192,6 +192,23 @@ router.get("/users/:id", async (req, res): Promise<void> => {
   }
 
   res.json(user);
+});
+
+router.get("/users/:id/rewards", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid user ID" });
+    return;
+  }
+  const entries = await db
+    .select()
+    .from(rewardLedgerTable)
+    .where(eq(rewardLedgerTable.userId, id))
+    .orderBy(desc(rewardLedgerTable.createdAt))
+    .limit(50);
+
+  const totalTon = entries.reduce((sum, e) => sum + e.amountTon, 0);
+  res.json({ entries, totalTon: Math.round(totalTon * 1e7) / 1e7 });
 });
 
 router.patch("/users/:id", async (req, res): Promise<void> => {

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Gamepad2, LayoutDashboard, Trophy, Database, User, Zap, Settings } from "lucide-react";
+import { Gamepad2, LayoutDashboard, Trophy, Database, User, Zap, Settings, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth";
 
@@ -36,8 +36,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="text-[9px] text-muted-foreground">pts</span>
               </div>
               {user.isAdmin && (
+                <Link href="/supervisor">
+                  <button className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 transition-colors" title="Review Queue">
+                    <Eye className="w-3.5 h-3.5 text-primary" />
+                  </button>
+                </Link>
+              )}
+              {user.isAdmin && (
                 <Link href="/admin">
-                  <button className="p-1.5 rounded-lg bg-muted/40 hover:bg-muted transition-colors">
+                  <button className="p-1.5 rounded-lg bg-muted/40 hover:bg-muted transition-colors" title="Admin">
                     <Settings className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 </Link>

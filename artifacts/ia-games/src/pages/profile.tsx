@@ -1,4 +1,5 @@
 import { useParams } from "wouter";
+import { useState, useEffect } from "react";
 import {
   useGetUser,
   useGetUserStats,
@@ -16,8 +17,23 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame } from "lucide-react";
+import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface RewardEntry {
+  id: number;
+  role: string;
+  amountTon: number;
+  pointsValue: number;
+  status: string;
+  createdAt: string;
+}
+interface RewardsData {
+  entries: RewardEntry[];
+  totalTon: number;
+}
 
 const levelBadgeColors: Record<string, string> = {
   expert: "text-yellow-400 border-yellow-400/50 bg-yellow-400/10",
@@ -46,6 +62,15 @@ export default function Profile() {
 
   const convertPoints = useConvertPoints();
   const rechargeEnergy = useRechargeEnergy();
+
+  const [rewards, setRewards] = useState<RewardsData | null>(null);
+  useEffect(() => {
+    if (!isOwnProfile || !userId) return;
+    fetch(`${API_BASE}/api/users/${userId}/rewards`)
+      .then((r) => r.json())
+      .then(setRewards)
+      .catch(() => {});
+  }, [userId, isOwnProfile]);
 
   const handleConvert = async () => {
     if (!user || user.points < 1000) return;
@@ -252,6 +277,42 @@ export default function Profile() {
                   Ti mancano {(1000 - currentPoints).toLocaleString()} punti
                 </p>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* TON Reward Ledger */}
+        {isOwnProfile && rewards && rewards.entries.length > 0 && (
+          <Card className="border-primary/30">
+            <CardHeader className="p-3 pb-2 border-b border-border/30">
+              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Coins className="w-3.5 h-3.5 text-primary" />
+                  Premi TON Ricevuti
+                </span>
+                <span className="text-primary font-black text-sm">{rewards.totalTon} TON</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 divide-y divide-border/20 max-h-48 overflow-y-auto">
+              {rewards.entries.map((entry) => (
+                <div key={entry.id} className="px-3 py-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold capitalize">{entry.role}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date(entry.createdAt).toLocaleDateString("it-IT")}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-primary">+{entry.amountTon.toFixed(5)} TON</p>
+                    <Badge variant="outline" className={cn(
+                      "text-[9px]",
+                      entry.status === "approved" ? "text-secondary border-secondary/40" : "text-muted-foreground"
+                    )}>
+                      {entry.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}

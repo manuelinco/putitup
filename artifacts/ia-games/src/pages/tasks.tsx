@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useGetNextTask, useSubmitResponse, useGetUserStats, useWatchAd, getGetUserStatsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
+import { useTelegramHaptic, useTelegramMainButton } from "@/hooks/useTelegram";
 import { Layout } from "@/components/layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ export default function Tasks() {
   const queryClient = useQueryClient();
   const { user, refreshUser } = useAuth();
   const userId = user?.id ?? 0;
+  const { impact, notification } = useTelegramHaptic();
 
   const { data: stats, refetch: refetchStats } = useGetUserStats(userId, { query: { enabled: !!userId } });
   const { data: task, refetch: refetchTask, isLoading } = useGetNextTask(
@@ -49,7 +51,6 @@ export default function Tasks() {
   const [totalToday, setTotalToday] = useState(0);
   const startTime = useRef<number>(Date.now());
 
-  // Reset on new task
   useEffect(() => {
     if (!task) return;
     setSelected(null);
@@ -62,7 +63,6 @@ export default function Tasks() {
     startTime.current = Date.now();
   }, [task?.id]);
 
-  // Timer countdown
   useEffect(() => {
     if (!timerActive || submitted) return;
     if (timeLeft <= 0) {
@@ -76,6 +76,7 @@ export default function Tasks() {
 
   const handleAutoSubmit = async () => {
     if (!task || submitted) return;
+    notification("warning");
     const responseTimeMs = Date.now() - startTime.current;
     await submitResponse.mutateAsync({
       data: { userId, taskId: task.id, answer: selected ?? "", responseTimeMs },
@@ -88,6 +89,7 @@ export default function Tasks() {
   const handleSubmit = async () => {
     if (!selected || !task || submitted) return;
     setTimerActive(false);
+    impact("medium");
     const responseTimeMs = Date.now() - startTime.current;
     try {
       const res = await submitResponse.mutateAsync({
@@ -97,10 +99,12 @@ export default function Tasks() {
       setResult({ correct, points: res.pointsEarned, xp: res.xpEarned });
       setSubmitted(true);
       if (correct) {
+        notification("success");
         setCombo((c) => c + 1);
         setBounce(true);
         setTimeout(() => setBounce(false), 600);
       } else {
+        notification("error");
         setCombo(0);
         setShake(true);
         setTimeout(() => setShake(false), 500);
@@ -112,13 +116,32 @@ export default function Tasks() {
     } catch {}
   };
 
-  const handleNext = () => refetchTask();
+  const handleNext = () => {
+    impact("light");
+    refetchTask();
+  };
+
+  const handleOptionSelect = (opt: string) => {
+    if (!submitted) {
+      impact("light");
+      setSelected(opt);
+    }
+  };
 
   const handleWatchAd = async () => {
     await watchAd.mutateAsync({ data: { userId, adType: "rewarded" } });
     refetchStats();
     refreshUser();
   };
+
+  useTelegramMainButton(
+    submitted ? "Task successivo ›" : "Conferma risposta",
+    submitted ? handleNext : handleSubmit,
+    {
+      visible: !!task && !isLoading,
+      active: submitted ? true : !!selected && !submitResponse.isPending,
+    }
+  );
 
   const payload = task?.dataPayload as Record<string, unknown> | undefined;
   const options = payload?.options as string[] | undefined;
@@ -275,7 +298,7 @@ export default function Tasks() {
                 </div>
               )}
 
-              {/* Answer options - game buttons */}
+              {/* Answer options */}
               {options && (
                 <div className="grid grid-cols-2 gap-2">
                   {options.map((opt) => {
@@ -288,7 +311,7 @@ export default function Tasks() {
                       <button
                         key={opt}
                         disabled={submitted}
-                        onClick={() => !submitted && setSelected(opt)}
+                        onClick={() => handleOptionSelect(opt)}
                         className={cn(
                           "p-3 rounded-xl border text-sm font-bold transition-all duration-200 text-left relative overflow-hidden",
                           "active:scale-95",

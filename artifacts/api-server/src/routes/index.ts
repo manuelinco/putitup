@@ -9,10 +9,12 @@ import rewardsRouter from "./rewards";
 import leaderboardRouter from "./leaderboard";
 import analyticsRouter from "./analytics";
 import clientsRouter from "./clients";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
 router.use(usersRouter);
 router.use(tasksRouter);
 router.use(responsesRouter);
