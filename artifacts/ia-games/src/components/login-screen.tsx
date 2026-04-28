@@ -11,7 +11,7 @@ export function LoginScreen() {
       <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Zap className="w-10 h-10 text-primary animate-pulse" />
-          <p className="text-sm text-muted-foreground">Caricamento...</p>
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
@@ -27,21 +27,21 @@ export function LoginScreen() {
             <Zap className="relative w-16 h-16 text-primary mx-auto" />
           </div>
           <h1 className="text-4xl font-black tracking-tight bg-gradient-to-br from-primary via-accent to-secondary text-transparent bg-clip-text">
-            IA GAMES
+            PUTITUP
           </h1>
-          <p className="text-base font-bold text-foreground">ULTIMATE</p>
+          <p className="text-base font-bold text-foreground">Human-in-the-Loop AI Data</p>
           <p className="text-sm text-muted-foreground px-4">
-            Etichetta dati AI. Guadagna punti. Converti in TON crypto.
+            Label AI data. Earn TON crypto. Power the future of AI.
           </p>
         </div>
 
         {/* Features */}
         <div className="grid grid-cols-2 gap-2">
           {[
-            { icon: Trophy, label: "Classifica Globale", color: "text-yellow-400" },
-            { icon: TrendingUp, label: "XP & Livelli", color: "text-secondary" },
-            { icon: Database, label: "Dataset Premium", color: "text-accent" },
-            { icon: Zap, label: "Crypto TON", color: "text-primary" },
+            { icon: Trophy, label: "Global Leaderboard", color: "text-yellow-400" },
+            { icon: TrendingUp, label: "XP & Levels", color: "text-secondary" },
+            { icon: Database, label: "Validated Datasets", color: "text-accent" },
+            { icon: Zap, label: "TON Rewards", color: "text-primary" },
           ].map(({ icon: Icon, label, color }) => (
             <Card key={label} className="bg-card/50 border-border/40">
               <CardContent className="p-3 flex items-center gap-2">
@@ -59,18 +59,18 @@ export function LoginScreen() {
             onClick={connectWallet}
           >
             <Wallet className="w-5 h-5 mr-2" />
-            Connetti Wallet TON
+            Connect TON Wallet
           </Button>
           <p className="text-[11px] text-center text-muted-foreground">
-            Apri con Telegram per accesso automatico.
+            Open in Telegram for automatic login.
             <br />
-            Sul web usa il tuo wallet TON.
+            On web, connect your TON wallet.
           </p>
         </div>
 
         {/* Footer */}
         <p className="text-[10px] text-center text-muted-foreground opacity-50">
-          Powered by TON Blockchain · IA Games Ultimate © 2025
+          Powered by TON Blockchain · PUTITUP © 2025
         </p>
       </div>
     </div>

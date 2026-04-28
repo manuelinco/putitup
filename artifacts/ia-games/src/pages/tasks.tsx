@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
 import { useTelegramHaptic, useTelegramMainButton } from "@/hooks/useTelegram";
 import { Layout } from "@/components/layout";
+import { AdChallenge } from "@/components/ad-challenge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -14,16 +15,18 @@ import { cn } from "@/lib/utils";
 const TASK_TIME_SECONDS = 30;
 
 const difficultyConfig: Record<string, { label: string; color: string; points: number }> = {
-  easy:   { label: "FACILE", color: "text-secondary border-secondary/40 bg-secondary/10", points: 10 },
-  medium: { label: "MEDIO",  color: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10", points: 20 },
-  hard:   { label: "DIFFICILE", color: "text-destructive border-destructive/40 bg-destructive/10", points: 30 },
+  easy:   { label: "EASY",   color: "text-secondary border-secondary/40 bg-secondary/10",      points: 10 },
+  medium: { label: "MEDIUM", color: "text-yellow-400 border-yellow-400/40 bg-yellow-400/10",   points: 20 },
+  hard:   { label: "HARD",   color: "text-destructive border-destructive/40 bg-destructive/10", points: 30 },
 };
 
 const typeLabels: Record<string, string> = {
-  image: "IMMAGINE",
-  text: "TESTO",
-  classification: "CLASSIFICAZIONE",
+  image:          "IMAGE",
+  text:           "TEXT",
+  classification: "CLASSIFICATION",
 };
+
+const TON_PER_TASK = 0.00004;
 
 export default function Tasks() {
   const queryClient = useQueryClient();
@@ -49,6 +52,7 @@ export default function Tasks() {
   const [shake, setShake] = useState(false);
   const [bounce, setBounce] = useState(false);
   const [totalToday, setTotalToday] = useState(0);
+  const [showAdChallenge, setShowAdChallenge] = useState(false);
   const startTime = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -128,14 +132,21 @@ export default function Tasks() {
     }
   };
 
-  const handleWatchAd = async () => {
+  const handleAdComplete = async () => {
+    setShowAdChallenge(false);
     await watchAd.mutateAsync({ data: { userId, adType: "rewarded" } });
     refetchStats();
     refreshUser();
+    notification("success");
+  };
+
+  const handleAdFail = () => {
+    setShowAdChallenge(false);
+    notification("error");
   };
 
   useTelegramMainButton(
-    submitted ? "Task successivo ›" : "Conferma risposta",
+    submitted ? "Next Task ›" : "Submit Answer",
     submitted ? handleNext : handleSubmit,
     {
       visible: !!task && !isLoading,
@@ -153,13 +164,22 @@ export default function Tasks() {
 
   return (
     <Layout>
+      {showAdChallenge && (
+        <AdChallenge
+          onComplete={handleAdComplete}
+          onFail={handleAdFail}
+          rewardText="+50 Energy"
+          adDuration={20}
+        />
+      )}
+
       <div className="p-4 space-y-3">
         {/* Stats row */}
         <div className="grid grid-cols-4 gap-1.5">
           <div className="bg-card/60 border border-border/40 rounded-xl p-2 text-center">
             <Zap className="w-3 h-3 text-secondary mx-auto mb-0.5" />
             <p className="text-sm font-black">{energy}</p>
-            <p className="text-[9px] text-muted-foreground uppercase">Energia</p>
+            <p className="text-[9px] text-muted-foreground uppercase">Energy</p>
             <Progress value={energyPct} className="h-0.5 mt-1" />
           </div>
           <div className="bg-card/60 border border-border/40 rounded-xl p-2 text-center">
@@ -170,7 +190,7 @@ export default function Tasks() {
           <div className="bg-card/60 border border-border/40 rounded-xl p-2 text-center">
             <Target className="w-3 h-3 text-accent mx-auto mb-0.5" />
             <p className="text-sm font-black">{stats?.accuracyRate?.toFixed(0) ?? 0}%</p>
-            <p className="text-[9px] text-muted-foreground uppercase">Prec.</p>
+            <p className="text-[9px] text-muted-foreground uppercase">Acc.</p>
           </div>
           <div className={cn(
             "border rounded-xl p-2 text-center transition-all",
@@ -188,21 +208,34 @@ export default function Tasks() {
         <div className="space-y-1">
           <div className="flex justify-between text-[10px] text-muted-foreground">
             <span className="font-bold uppercase tracking-wider">{user?.level ?? "base"}</span>
-            <span>{stats?.xp ?? user?.xp ?? 0} XP · {totalToday} oggi</span>
+            <span>{stats?.xp ?? user?.xp ?? 0} XP · {totalToday} today</span>
           </div>
           <Progress value={((stats?.xp ?? user?.xp ?? 0) % 500) / 5} className="h-1" />
+        </div>
+
+        {/* TON reward indicator */}
+        <div className="flex items-center justify-center gap-2 py-1">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/30">
+            <span className="text-[10px] font-black text-accent">+{TON_PER_TASK} TON</span>
+            <span className="text-[10px] text-muted-foreground">per task</span>
+          </div>
         </div>
 
         {/* Low energy warning */}
         {energy < 20 && (
           <div className="flex items-center justify-between p-3 rounded-xl border border-destructive/40 bg-destructive/10">
             <div>
-              <p className="text-xs font-black text-destructive">Energia esaurita!</p>
-              <p className="text-[10px] text-muted-foreground">Guarda un annuncio per ricaricare</p>
+              <p className="text-xs font-black text-destructive">Energy depleted!</p>
+              <p className="text-[10px] text-muted-foreground">Watch an ad to recharge</p>
             </div>
-            <Button size="sm" variant="outline" className="text-xs border-destructive/40 text-destructive h-8"
-              onClick={handleWatchAd} disabled={watchAd.isPending}>
-              Guarda Ad
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-destructive/40 text-destructive h-8"
+              onClick={() => setShowAdChallenge(true)}
+              disabled={watchAd.isPending}
+            >
+              Watch Ad
             </Button>
           </div>
         )}
@@ -212,16 +245,16 @@ export default function Tasks() {
           <Card className="border-border/50 min-h-[300px] flex items-center justify-center">
             <div className="text-center space-y-2">
               <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-              <p className="text-xs text-muted-foreground">Caricamento task...</p>
+              <p className="text-xs text-muted-foreground">Loading task...</p>
             </div>
           </Card>
         ) : !task ? (
           <Card className="border-border/50 text-center min-h-[200px] flex items-center justify-center">
             <CardContent className="p-8 space-y-3">
               <Shield className="w-12 h-12 text-muted-foreground mx-auto" />
-              <p className="font-black">Nessun task disponibile</p>
-              <p className="text-xs text-muted-foreground">Hai completato tutto! Torna presto.</p>
-              <Button variant="outline" size="sm" onClick={handleNext}>Riprova</Button>
+              <p className="font-black">No tasks available</p>
+              <p className="text-xs text-muted-foreground">All done! Come back soon.</p>
+              <Button variant="outline" size="sm" onClick={handleNext}>Retry</Button>
             </CardContent>
           </Card>
         ) : (
@@ -251,6 +284,7 @@ export default function Tasks() {
                     <span className="text-[10px] font-black text-yellow-400">x{comboMultiplier}</span>
                   )}
                   <span className="text-xs font-black text-primary">+{task.pointsReward * comboMultiplier}pts</span>
+                  <span className="text-[9px] text-accent font-bold">+{TON_PER_TASK} TON</span>
                 </div>
               </div>
 
@@ -259,7 +293,7 @@ export default function Tasks() {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Timer className="w-3 h-3" /> Tempo
+                      <Timer className="w-3 h-3" /> Time
                     </span>
                     <span className={cn("font-black", timeLeft <= 10 ? "text-destructive animate-pulse" : "")}>
                       {timeLeft}s
@@ -286,7 +320,7 @@ export default function Tasks() {
 
               {/* Question */}
               <p className="text-sm font-bold leading-snug">
-                {payload?.question as string ?? "Etichetta questo elemento:"}
+                {payload?.question as string ?? "Label this element:"}
               </p>
 
               {/* Text snippet */}
@@ -345,10 +379,10 @@ export default function Tasks() {
                     : "bg-destructive/20 text-destructive border border-destructive/30"
                 )}>
                   {result.correct
-                    ? `✓ Corretto! +${result.points} pts  +${result.xp} XP${combo > 1 ? ` 🔥 Combo x${comboMultiplier}!` : ""}`
+                    ? `✓ Correct! +${result.points} pts · +${result.xp} XP · +${TON_PER_TASK} TON${combo > 1 ? ` 🔥 Combo x${comboMultiplier}!` : ""}`
                     : timeLeft <= 0
-                    ? "⏱ Tempo scaduto!"
-                    : "✗ Risposta errata — riprova!"}
+                    ? "⏱ Time's up!"
+                    : "✗ Wrong answer — try again!"}
                 </div>
               )}
 
@@ -359,7 +393,7 @@ export default function Tasks() {
                   disabled={!selected || submitResponse.isPending}
                   onClick={handleSubmit}
                 >
-                  {submitResponse.isPending ? "Invio..." : "Conferma risposta"}
+                  {submitResponse.isPending ? "Submitting..." : "Submit Answer"}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               ) : (
@@ -368,12 +402,24 @@ export default function Tasks() {
                   variant="outline"
                   onClick={handleNext}
                 >
-                  Task successivo
+                  Next Task
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Extra task slot via ad */}
+        {!isLoading && energy >= 20 && (
+          <button
+            onClick={() => setShowAdChallenge(true)}
+            disabled={watchAd.isPending}
+            className="w-full py-2.5 rounded-xl border border-dashed border-primary/30 text-[11px] font-bold text-muted-foreground hover:border-primary/60 hover:text-primary transition-all"
+          >
+            <Zap className="w-3 h-3 inline mr-1 text-primary" />
+            Watch ad for +50 energy
+          </button>
         )}
       </div>
     </Layout>

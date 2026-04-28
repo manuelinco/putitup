@@ -12,6 +12,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
 import { Layout } from "@/components/layout";
+import { AdChallenge } from "@/components/ad-challenge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ export default function Profile() {
   const params = useParams<{ id: string }>();
   const userId = parseInt(params.id ?? "0", 10);
   const queryClient = useQueryClient();
-  const { user: authUser, logout, source, wallet, disconnectWallet, refreshUser } = useAuth();
+  const { user: authUser, logout, source, wallet, refreshUser } = useAuth();
   const isOwnProfile = authUser?.id === userId;
 
   const { data: user, isLoading: userLoading } = useGetUser(userId, { query: { enabled: !!userId } });
@@ -64,6 +65,8 @@ export default function Profile() {
   const rechargeEnergy = useRechargeEnergy();
 
   const [rewards, setRewards] = useState<RewardsData | null>(null);
+  const [showAdChallenge, setShowAdChallenge] = useState(false);
+
   useEffect(() => {
     if (!isOwnProfile || !userId) return;
     fetch(`${API_BASE}/api/users/${userId}/rewards`)
@@ -79,10 +82,15 @@ export default function Profile() {
     refreshUser();
   };
 
-  const handleRecharge = async () => {
+  const handleAdComplete = async () => {
+    setShowAdChallenge(false);
     await rechargeEnergy.mutateAsync({ data: { userId, method: "ad" } });
     queryClient.invalidateQueries({ queryKey: getGetUserStatsQueryKey(userId) });
     refreshUser();
+  };
+
+  const handleAdFail = () => {
+    setShowAdChallenge(false);
   };
 
   const isLoading = userLoading || statsLoading;
@@ -113,6 +121,14 @@ export default function Profile() {
 
   return (
     <Layout>
+      {showAdChallenge && (
+        <AdChallenge
+          onComplete={handleAdComplete}
+          onFail={handleAdFail}
+          rewardText="+50 Energy"
+        />
+      )}
+
       <div className="p-4 space-y-4 pb-6">
         {/* Profile header */}
         <div className="flex items-center gap-4 pt-3">
@@ -147,7 +163,7 @@ export default function Profile() {
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="p-4 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="font-bold">Progresso Livello</span>
+              <span className="font-bold">Level Progress</span>
               <span className="text-muted-foreground">{xpInLevel}/500 XP</span>
             </div>
             <Progress value={xpProgress} className="h-2" />
@@ -161,9 +177,9 @@ export default function Profile() {
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-2">
           {[
-            { label: "Punti", value: currentPoints.toLocaleString(), icon: Star, color: "text-primary" },
-            { label: "Task Completati", value: (stats?.tasksCompleted ?? 0).toLocaleString(), icon: Target, color: "text-secondary" },
-            { label: "Precisione", value: `${(stats?.accuracyRate ?? user.score ?? 0).toFixed(1)}%`, icon: TrendingUp, color: "text-accent" },
+            { label: "Points", value: currentPoints.toLocaleString(), icon: Star, color: "text-primary" },
+            { label: "Tasks Done", value: (stats?.tasksCompleted ?? 0).toLocaleString(), icon: Target, color: "text-secondary" },
+            { label: "Accuracy", value: `${(stats?.accuracyRate ?? user.score ?? 0).toFixed(1)}%`, icon: TrendingUp, color: "text-accent" },
             { label: "Streak", value: `${stats?.currentStreak ?? user.streak ?? 0}d`, icon: Flame, color: "text-orange-400" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label} className="bg-card/60 border-border/40">
@@ -183,7 +199,7 @@ export default function Profile() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Zap className="w-4 h-4 text-secondary" />
-                  <span className="font-bold text-sm">Energia</span>
+                  <span className="font-bold text-sm">Energy</span>
                 </div>
                 <span className="text-sm font-bold">{currentEnergy}/{currentMaxEnergy}</span>
               </div>
@@ -191,11 +207,11 @@ export default function Profile() {
               <Button
                 variant="outline" size="sm"
                 className="w-full text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
-                onClick={handleRecharge}
+                onClick={() => setShowAdChallenge(true)}
                 disabled={rechargeEnergy.isPending || currentEnergy >= currentMaxEnergy}
               >
                 <Zap className="w-3 h-3 mr-1" />
-                Ricarica con pubblicità (+50)
+                Watch ad to recharge (+50)
               </Button>
             </CardContent>
           </Card>
@@ -206,7 +222,7 @@ export default function Profile() {
           <CardHeader className="p-3 pb-2 border-b border-border/30">
             <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Target className="w-3.5 h-3.5 text-primary" />
-              Missioni Giornaliere
+              Daily Missions
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 divide-y divide-border/20">
@@ -257,12 +273,12 @@ export default function Profile() {
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-bold text-sm">Converti in TON</p>
-                  <p className="text-[11px] text-muted-foreground">1.000 pts = 1 TON</p>
+                  <p className="font-bold text-sm">Convert to TON</p>
+                  <p className="text-[11px] text-muted-foreground">1,000 pts = 1 TON</p>
                 </div>
                 <div className="text-right">
                   <p className="font-black text-2xl text-accent">{(Math.floor(currentPoints / 1000)).toFixed(0)}</p>
-                  <p className="text-[10px] text-muted-foreground">TON disponibili</p>
+                  <p className="text-[10px] text-muted-foreground">TON available</p>
                 </div>
               </div>
               <Button
@@ -270,11 +286,11 @@ export default function Profile() {
                 disabled={currentPoints < 1000 || convertPoints.isPending}
                 onClick={handleConvert}
               >
-                {convertPoints.isPending ? "Conversione..." : "Converti 1.000 pts → 1 TON"}
+                {convertPoints.isPending ? "Converting..." : "Convert 1,000 pts → 1 TON"}
               </Button>
               {currentPoints < 1000 && (
                 <p className="text-[10px] text-center text-muted-foreground">
-                  Ti mancano {(1000 - currentPoints).toLocaleString()} punti
+                  You need {(1000 - currentPoints).toLocaleString()} more points
                 </p>
               )}
             </CardContent>
@@ -288,7 +304,7 @@ export default function Profile() {
               <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Coins className="w-3.5 h-3.5 text-primary" />
-                  Premi TON Ricevuti
+                  TON Rewards Received
                 </span>
                 <span className="text-primary font-black text-sm">{rewards.totalTon} TON</span>
               </CardTitle>
@@ -299,7 +315,7 @@ export default function Profile() {
                   <div>
                     <p className="text-xs font-bold capitalize">{entry.role}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {new Date(entry.createdAt).toLocaleDateString("it-IT")}
+                      {new Date(entry.createdAt).toLocaleDateString("en-US")}
                     </p>
                   </div>
                   <div className="text-right">
@@ -322,14 +338,14 @@ export default function Profile() {
           <Card className="border-border/40">
             <CardContent className="p-3 flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold">Pubblicità oggi</p>
-                <p className="text-[10px] text-muted-foreground">Limite giornaliero: {adTracking.dailyCap}</p>
+                <p className="text-sm font-bold">Ads today</p>
+                <p className="text-[10px] text-muted-foreground">Daily cap: {adTracking.dailyCap}</p>
               </div>
               <div className="text-right">
                 <p className="text-lg font-black">{adTracking.adsWatchedToday}/{adTracking.dailyCap}</p>
                 {adTracking.dailyCapReached && (
                   <Badge variant="outline" className="text-[9px] text-destructive border-destructive/40">
-                    Limite raggiunto
+                    Cap reached
                   </Badge>
                 )}
               </div>

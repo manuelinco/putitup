@@ -1,9 +1,9 @@
-import { useGetAnalyticsSummary, useGetFeaturedDatasets, useGetRecentActivity } from "@workspace/api-client-react";
+import { useGetAnalyticsSummary, useGetRecentActivity } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/layout";
-import { Gamepad2, Users, Database, Zap, Activity, Trophy, TrendingUp } from "lucide-react";
+import { Gamepad2, Users, Zap, Activity, Trophy, TrendingUp, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth";
@@ -18,7 +18,6 @@ const levelColors: Record<string, string> = {
 export default function Home() {
   const { user } = useAuth();
   const { data: stats, isLoading: statsLoading } = useGetAnalyticsSummary();
-  const { data: featured, isLoading: featuredLoading } = useGetFeaturedDatasets();
   const { data: activity, isLoading: activityLoading } = useGetRecentActivity({ query: { limit: 5 } });
 
   return (
@@ -53,15 +52,15 @@ export default function Home() {
         <section className="text-center py-6 space-y-4 relative overflow-hidden rounded-2xl border border-primary/20 bg-card">
           <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
           <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-br from-primary via-accent to-secondary text-transparent bg-clip-text">
-            IA GAMES ULTIMATE
+            PUTITUP
           </h1>
           <p className="text-sm text-muted-foreground px-6">
-            Etichetta dati AI · Guadagna punti · Converti in TON crypto
+            Label AI data · Earn TON crypto · Power the future of AI
           </p>
           <Link href="/tasks">
             <Button size="lg" className="w-48 font-black text-base shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_35px_rgba(168,85,247,0.6)] active:scale-95 transition-all">
               <Gamepad2 className="mr-2 h-5 w-5" />
-              GIOCA ORA
+              START LABELING
             </Button>
           </Link>
         </section>
@@ -73,7 +72,7 @@ export default function Home() {
               <Users className="h-5 w-5 text-secondary flex-shrink-0" />
               <div>
                 {statsLoading ? <Skeleton className="h-5 w-12" /> : <p className="text-lg font-black">{stats?.totalUsers.toLocaleString()}</p>}
-                <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Giocatori</p>
+                <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Contributors</p>
               </div>
             </CardContent>
           </Card>
@@ -82,7 +81,7 @@ export default function Home() {
               <Zap className="h-5 w-5 text-primary flex-shrink-0" />
               <div>
                 {statsLoading ? <Skeleton className="h-5 w-12" /> : <p className="text-lg font-black">{stats?.tasksCompletedToday.toLocaleString()}</p>}
-                <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Oggi</p>
+                <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Today</p>
               </div>
             </CardContent>
           </Card>
@@ -94,15 +93,15 @@ export default function Home() {
             <Card className="hover-elevate cursor-pointer bg-yellow-400/5 border-yellow-400/20 hover:border-yellow-400/40 transition-all">
               <CardContent className="p-3 text-center">
                 <Trophy className="w-5 h-5 text-yellow-400 mx-auto mb-1" />
-                <p className="text-[10px] font-bold uppercase">Classifica</p>
+                <p className="text-[10px] font-bold uppercase">Rankings</p>
               </CardContent>
             </Card>
           </Link>
-          <Link href="/datasets">
-            <Card className="hover-elevate cursor-pointer bg-accent/5 border-accent/20 hover:border-accent/40 transition-all">
+          <Link href="/tasks">
+            <Card className="hover-elevate cursor-pointer bg-primary/5 border-primary/20 hover:border-primary/40 transition-all">
               <CardContent className="p-3 text-center">
-                <Database className="w-5 h-5 text-accent mx-auto mb-1" />
-                <p className="text-[10px] font-bold uppercase">Dataset</p>
+                <Target className="w-5 h-5 text-primary mx-auto mb-1" />
+                <p className="text-[10px] font-bold uppercase">Tasks</p>
               </CardContent>
             </Card>
           </Link>
@@ -110,56 +109,47 @@ export default function Home() {
             <Card className="hover-elevate cursor-pointer bg-secondary/5 border-secondary/20 hover:border-secondary/40 transition-all">
               <CardContent className="p-3 text-center">
                 <TrendingUp className="w-5 h-5 text-secondary mx-auto mb-1" />
-                <p className="text-[10px] font-bold uppercase">Statistiche</p>
+                <p className="text-[10px] font-bold uppercase">My Stats</p>
               </CardContent>
             </Card>
           </Link>
         </div>
 
-        {/* Featured datasets */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
+        {/* Today's Progress */}
+        {user && (
+          <section className="space-y-3">
             <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Database className="w-3.5 h-3.5 text-primary" />
-              Dataset in evidenza
+              <Zap className="w-3.5 h-3.5 text-primary" />
+              Today's Progress
             </h2>
-            <Link href="/datasets">
-              <Button variant="link" size="sm" className="text-xs text-primary p-0 h-auto font-bold">Vedi tutti →</Button>
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {featuredLoading
-              ? Array(2).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)
-              : featured?.map((dataset) => (
-                <Link key={dataset.id} href={`/datasets/${dataset.id}`}>
-                  <Card className="hover-elevate cursor-pointer border-border/40 bg-card/60 hover:border-primary/40 transition-all">
-                    <CardContent className="p-3 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{dataset.name}</p>
-                        <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{dataset.description}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <Badge variant="outline" className={cn("text-[9px] mb-1",
-                          dataset.accessType === "free" ? "text-secondary border-secondary/40 bg-secondary/10" :
-                          dataset.accessType === "ads" ? "text-accent border-accent/40 bg-accent/10" :
-                          "text-primary border-primary/40 bg-primary/10"
-                        )}>
-                          {dataset.accessType === "free" ? "Gratis" : dataset.accessType === "ads" ? "Ads" : "Premium"}
-                        </Badge>
-                        <p className="text-[10px] text-secondary font-bold">{dataset.qualityScore}%</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-          </div>
-        </section>
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="bg-card/50 border-border/40">
+                <CardContent className="p-3 text-center">
+                  <p className="text-xl font-black text-primary">{user.energy}</p>
+                  <p className="text-[9px] uppercase text-muted-foreground font-semibold mt-0.5">Energy</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-card/50 border-border/40">
+                <CardContent className="p-3 text-center">
+                  <p className="text-xl font-black text-yellow-400">🔥{user.streak}</p>
+                  <p className="text-[9px] uppercase text-muted-foreground font-semibold mt-0.5">Streak</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-card/50 border-border/40">
+                <CardContent className="p-3 text-center">
+                  <p className="text-xl font-black text-secondary">{user.xp}</p>
+                  <p className="text-[9px] uppercase text-muted-foreground font-semibold mt-0.5">XP</p>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        )}
 
         {/* Live feed */}
         <section className="space-y-2">
           <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <Activity className="w-3.5 h-3.5 text-secondary" />
-            Feed live
+            Live Feed
           </h2>
           <Card className="bg-card/30 border-border/30 overflow-hidden">
             <CardContent className="p-0 divide-y divide-border/20">

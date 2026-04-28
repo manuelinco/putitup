@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Gamepad2, LayoutDashboard, Trophy, Database, User, Zap, Settings, Eye } from "lucide-react";
+import { Gamepad2, LayoutDashboard, Trophy, User, Zap, Settings, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth";
 
@@ -11,8 +11,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Home", icon: LayoutDashboard },
     { href: "/tasks", label: "Tasks", icon: Gamepad2 },
     { href: "/leaderboard", label: "Top", icon: Trophy },
-    { href: "/datasets", label: "Dati", icon: Database },
-    { href: user ? `/profile/${user.id}` : "/profile/0", label: "Profilo", icon: User },
+    { href: user ? `/profile/${user.id}` : "/profile/0", label: "Profile", icon: User },
   ];
 
   return (
@@ -25,7 +24,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Zap className="w-5 h-5 text-primary drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
             </div>
             <span className="font-black text-base tracking-tight uppercase bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              IA Games
+              PUTITUP
             </span>
           </div>
           {user && (
@@ -36,7 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="text-[9px] text-muted-foreground">pts</span>
               </div>
               {user.isAdmin && (
-                <Link href="/supervisor">
+                <Link href="/controller">
                   <button className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 transition-colors" title="Review Queue">
                     <Eye className="w-3.5 h-3.5 text-primary" />
                   </button>

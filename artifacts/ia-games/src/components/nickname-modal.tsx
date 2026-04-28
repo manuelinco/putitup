@@ -61,10 +61,10 @@ export function NicknameModal() {
               <User className="w-8 h-8 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-black tracking-tight">Scegli il tuo nickname</h2>
+              <h2 className="text-xl font-black tracking-tight">Choose your username</h2>
               <p className="text-xs text-muted-foreground mt-1">
                 {displaySource && <span className="text-primary font-semibold">{displaySource}</span>}
-                {" "}connesso! Scegli un nome univoco per iniziare.
+                {" "}connected! Pick a unique name to start earning.
               </p>
             </div>
           </div>
@@ -76,7 +76,7 @@ export function NicknameModal() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20))}
-                placeholder="es. DataHunter99"
+                placeholder="e.g. DataHunter99"
                 className={cn(
                   "w-full px-4 py-3 rounded-xl bg-muted/40 border text-sm font-semibold placeholder:text-muted-foreground focus:outline-none transition-all pr-10",
                   status === "available" ? "border-secondary/60 focus:border-secondary" :
@@ -96,18 +96,18 @@ export function NicknameModal() {
             {/* Feedback */}
             <div className="h-4">
               {status === "available" && (
-                <p className="text-[11px] text-secondary font-semibold">✓ Disponibile!</p>
+                <p className="text-[11px] text-secondary font-semibold">✓ Available!</p>
               )}
               {(status === "taken" || status === "invalid") && (
-                <p className="text-[11px] text-destructive">{reason || "Username non disponibile"}</p>
+                <p className="text-[11px] text-destructive">{reason || "Username not available"}</p>
               )}
               {status === "idle" && username.length > 0 && username.length < 3 && (
-                <p className="text-[11px] text-muted-foreground">Minimo 3 caratteri</p>
+                <p className="text-[11px] text-muted-foreground">Minimum 3 characters</p>
               )}
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              Solo lettere, numeri e underscore. 3-20 caratteri.
+              Letters, numbers and underscores only. 3–20 characters.
             </p>
           </div>
 
@@ -118,9 +118,9 @@ export function NicknameModal() {
             onClick={handleSubmit}
           >
             {submitting ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creazione...</>
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating account...</>
             ) : (
-              <><Zap className="w-4 h-4 mr-2" /> Inizia a guadagnare</>
+              <><Zap className="w-4 h-4 mr-2" /> Start earning</>
             )}
           </Button>
         </CardContent>

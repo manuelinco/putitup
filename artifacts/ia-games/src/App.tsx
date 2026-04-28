@@ -11,11 +11,9 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Tasks from "@/pages/tasks";
 import Leaderboard from "@/pages/leaderboard";
-import Datasets from "@/pages/datasets";
-import DatasetDetail from "@/pages/dataset-detail";
 import Profile from "@/pages/profile";
 import Admin from "@/pages/admin";
-import Supervisor from "@/pages/supervisor";
+import Controller from "@/pages/supervisor";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,11 +30,9 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/leaderboard" component={Leaderboard} />
-      <Route path="/datasets" component={Datasets} />
-      <Route path="/datasets/:id" component={DatasetDetail} />
       <Route path="/profile/:id" component={Profile} />
       <Route path="/admin" component={Admin} />
-      <Route path="/supervisor" component={Supervisor} />
+      <Route path="/controller" component={Controller} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -53,7 +49,7 @@ function AppInner() {
     || currentPath.startsWith("/profile")
     || currentPath.startsWith("/leaderboard")
     || currentPath.startsWith("/admin")
-    || currentPath.startsWith("/supervisor");
+    || currentPath.startsWith("/controller");
 
   if (isLoading) {
     return (

@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle, XCircle, Eye, Shield, ChevronRight, Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle, Eye, Shield, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -34,7 +34,7 @@ interface TaskReview {
   supervisorApprovedAt: string | null;
 }
 
-export default function Supervisor() {
+export default function Controller() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [tasks, setTasks] = useState<TaskReview[]>([]);
@@ -42,7 +42,7 @@ export default function Supervisor() {
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<number | null>(null);
   const [adminApproving, setAdminApproving] = useState<number | null>(null);
-  const [tab, setTab] = useState<"supervisor" | "admin">("supervisor");
+  const [tab, setTab] = useState<"controller" | "admin">("controller");
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -67,18 +67,16 @@ export default function Supervisor() {
     return null;
   }
 
-  const isSupervisorOrAdmin = user.isAdmin;
-
-  if (!isSupervisorOrAdmin) {
+  if (!user.isAdmin) {
     return (
       <Layout>
         <div className="p-4 flex items-center justify-center min-h-[60vh]">
           <Card className="border-destructive/40 bg-destructive/5 w-full max-w-sm">
             <CardContent className="p-6 text-center space-y-3">
               <Shield className="w-12 h-12 text-destructive mx-auto" />
-              <p className="font-black">Accesso negato</p>
-              <p className="text-xs text-muted-foreground">Solo supervisor e admin possono accedere a questa sezione.</p>
-              <Button variant="outline" size="sm" onClick={() => navigate("/")}>Torna alla home</Button>
+              <p className="font-black">Access Denied</p>
+              <p className="text-xs text-muted-foreground">Only controllers and admins can access this section.</p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/")}>Back to Home</Button>
             </CardContent>
           </Card>
         </div>
@@ -86,7 +84,7 @@ export default function Supervisor() {
     );
   }
 
-  const handleSupervisorApprove = async (taskId: number) => {
+  const handleControllerApprove = async (taskId: number) => {
     if (!user) return;
     setApproving(taskId);
     try {
@@ -118,8 +116,8 @@ export default function Supervisor() {
     }
   };
 
-  const displayTasks = tab === "supervisor" ? tasks : adminTasks;
-  const stageLabel = tab === "supervisor" ? "Supervisor Review" : "Admin Review";
+  const displayTasks = tab === "controller" ? tasks : adminTasks;
+  const stageLabel = tab === "controller" ? "Controller Review" : "Admin Review";
 
   return (
     <Layout>
@@ -131,7 +129,7 @@ export default function Supervisor() {
               <Eye className="w-5 h-5 text-primary" />
               Review Queue
             </h1>
-            <p className="text-[11px] text-muted-foreground">Approva task con consenso raggiunto</p>
+            <p className="text-[11px] text-muted-foreground">Approve tasks that reached consensus</p>
           </div>
           <Button variant="ghost" size="sm" onClick={loadTasks} disabled={loading}>
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
@@ -140,7 +138,7 @@ export default function Supervisor() {
 
         {/* Tab switcher */}
         <div className="grid grid-cols-2 gap-2">
-          {(["supervisor", "admin"] as const).map((t) => (
+          {(["controller", "admin"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -151,12 +149,12 @@ export default function Supervisor() {
                   : "border-border/40 bg-card/40 text-muted-foreground hover:border-border"
               )}
             >
-              {t === "supervisor" ? "Supervisor" : "Admin"}
+              {t === "controller" ? "Controller" : "Admin"}
               <span className={cn(
                 "ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-black",
                 tab === t ? "bg-primary/30" : "bg-muted/60"
               )}>
-                {t === "supervisor" ? tasks.length : adminTasks.length}
+                {t === "controller" ? tasks.length : adminTasks.length}
               </span>
             </button>
           ))}
@@ -173,9 +171,9 @@ export default function Supervisor() {
           <Card className="border-border/40 text-center">
             <CardContent className="p-8 space-y-2">
               <CheckCircle className="w-10 h-10 text-secondary mx-auto" />
-              <p className="font-black">Nessun task in attesa</p>
+              <p className="font-black">No tasks pending</p>
               <p className="text-xs text-muted-foreground">
-                {stageLabel}: la coda è vuota.
+                {stageLabel}: queue is empty.
               </p>
             </CardContent>
           </Card>
@@ -230,7 +228,7 @@ export default function Supervisor() {
 
                     {/* Consensus progress */}
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-muted-foreground">Voti ricevuti:</span>
+                      <span className="text-muted-foreground">Votes received:</span>
                       <span className="font-black text-primary">{task.consensusCount ?? 0} / {task.requiredVotes ?? 3}</span>
                     </div>
                     <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
@@ -241,16 +239,16 @@ export default function Supervisor() {
                     </div>
 
                     {/* Action */}
-                    {tab === "supervisor" ? (
+                    {tab === "controller" ? (
                       <Button
                         className="w-full h-10 font-bold text-sm"
-                        onClick={() => handleSupervisorApprove(task.id)}
+                        onClick={() => handleControllerApprove(task.id)}
                         disabled={isApprovingSv}
                       >
                         {isApprovingSv ? (
-                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Approvazione...</>
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Approving...</>
                         ) : (
-                          <><CheckCircle className="w-4 h-4 mr-2" /> Approva → Admin Review</>
+                          <><CheckCircle className="w-4 h-4 mr-2" /> Approve → Admin Review</>
                         )}
                       </Button>
                     ) : (
@@ -260,9 +258,9 @@ export default function Supervisor() {
                         disabled={isApprovingAd}
                       >
                         {isApprovingAd ? (
-                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Approvazione...</>
+                          <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Approving...</>
                         ) : (
-                          <><CheckCircle className="w-4 h-4 mr-2" /> Approva & Pubblica + Premi</>
+                          <><CheckCircle className="w-4 h-4 mr-2" /> Approve & Publish + Rewards</>
                         )}
                       </Button>
                     )}
