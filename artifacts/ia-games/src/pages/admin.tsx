@@ -1,20 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useGetAnalyticsSummary,
-  useGetTaskStats,
   useListUsers,
-  useCreateTask,
   useCreateDataset,
-  getListUsersQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings, Users, Database, Target, TrendingUp, Plus, CheckCircle } from "lucide-react";
+import {
+  Settings,
+  Users,
+  Database,
+  Target,
+  TrendingUp,
+  Plus,
+  Trash2,
+  CheckCircle,
+  Eye,
+  Wallet,
+  Trophy,
+  Coins,
+  BarChart2,
+  ClipboardList,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -29,422 +40,747 @@ async function apiFetch(path: string, options?: RequestInit) {
   return data;
 }
 
-export default function Admin() {
-  const { data: analytics, isLoading: analyticsLoading } = useGetAnalyticsSummary();
-  const { data: taskStats } = useGetTaskStats();
-  const { data: users } = useListUsers({ limit: 10 });
-  const queryClient = useQueryClient();
+type TaskEntry = {
+  type: "text" | "image" | "classification";
+  question: string;
+  content: string;
+  option1: string;
+  option2: string;
+  option3: string;
+  option4: string;
+  correctAnswer: string;
+  difficulty: "easy" | "medium" | "hard";
+};
 
-  const createTask = useCreateTask();
+const emptyTask = (): TaskEntry => ({
+  type: "text",
+  question: "",
+  content: "",
+  option1: "",
+  option2: "",
+  option3: "",
+  option4: "",
+  correctAnswer: "",
+  difficulty: "easy",
+});
+
+interface AdminStats {
+  totalUsers: number;
+  totalTasks: number;
+  totalResponses: number;
+  totalDatasets: number;
+  pendingPayments: number;
+  totalPaidTon: number;
+}
+
+interface PendingPayment {
+  payment: {
+    id: number;
+    userId: number;
+    walletAddress: string;
+    amountTon: number;
+    reason: string;
+    isPaid: boolean;
+    createdAt: string;
+  };
+  user: {
+    id: number;
+    username: string;
+    walletAddress: string;
+  } | null;
+}
+
+type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve";
+
+export default function Admin() {
+  const { data: analytics } = useGetAnalyticsSummary();
+  const { data: users } = useListUsers({ limit: 20 });
   const createDataset = useCreateDataset();
 
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [showDatasetForm, setShowDatasetForm] = useState(false);
-  const [taskForm, setTaskForm] = useState({
-    type: "text" as "image" | "text" | "classification",
-    question: "",
-    option1: "",
-    option2: "",
-    option3: "",
-    option4: "",
-    correctAnswer: "",
-    difficulty: "easy" as "easy" | "medium" | "hard",
-    pointsReward: 10,
-  });
+  const [activeSection, setActiveSection] = useState<ActiveSection>("stats");
+  const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState<number | null>(null);
+  const [txHashInput, setTxHashInput] = useState<Record<number, string>>({});
+  const [approvalResult, setApprovalResult] = useState<string | null>(null);
+
+  const [batchTasks, setBatchTasks] = useState<TaskEntry[]>([emptyTask()]);
+  const [currentTask, setCurrentTask] = useState<TaskEntry>(emptyTask());
+  const [batchDatasetId, setBatchDatasetId] = useState("");
+  const [batchSaving, setBatchSaving] = useState(false);
+  const [batchSaved, setBatchSaved] = useState(false);
+
   const [datasetForm, setDatasetForm] = useState({
     name: "",
     description: "",
     category: "",
     accessType: "ads" as "free" | "ads" | "premium",
-    qualityScore: 90,
     workflowMode: "supervisor_admin",
-    votesRequired: 100,
+    votesRequired: 5,
     consensusThreshold: 0.99,
-    tokenCost: 10,
-    adsRequired: 5,
-    price: 49.99,
-    taskCount: 50,
-    taskType: "image" as "image" | "text" | "classification",
+    tokenCost: 0,
+    adsRequired: 3,
+    price: 0,
+    lotteryPool: 0,
+    lotteryWinners: 0,
+    completionTarget: 100,
   });
-  const [taskCreated, setTaskCreated] = useState(false);
-  const [datasetCreated, setDatasetCreated] = useState(false);
+  const [datasetSaved, setDatasetSaved] = useState(false);
 
-  const handleCreateTask = async () => {
-    const options = [taskForm.option1, taskForm.option2, taskForm.option3, taskForm.option4].filter(Boolean);
-    await createTask.mutateAsync({
-      data: {
-        type: taskForm.type,
-        dataPayload: {
-          question: taskForm.question,
-          options,
-          text: taskForm.type === "text" ? taskForm.question : undefined,
-        },
-        correctAnswer: taskForm.correctAnswer || null,
-        difficulty: taskForm.difficulty,
-        pointsReward: taskForm.pointsReward,
-        isGolden: !!taskForm.correctAnswer,
-      },
-    });
-    setTaskCreated(true);
-    setShowTaskForm(false);
-    setTimeout(() => setTaskCreated(false), 3000);
+  useEffect(() => {
+    apiFetch("/api/admin/stats")
+      .then(setAdminStats)
+      .catch(() => {});
+  }, []);
+
+  const loadPendingPayments = async () => {
+    setPendingLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/pending-payments");
+      setPendingPayments(data);
+    } catch { /* ignore */ }
+    setPendingLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeSection === "payments") loadPendingPayments();
+  }, [activeSection]);
+
+  const handleMarkPaid = async (paymentId: number) => {
+    setMarkingPaid(paymentId);
+    try {
+      await apiFetch(`/api/admin/pending-payments/${paymentId}/mark-paid`, {
+        method: "PATCH",
+        body: JSON.stringify({ txHash: txHashInput[paymentId] ?? null }),
+      });
+      await loadPendingPayments();
+    } catch { /* ignore */ }
+    setMarkingPaid(null);
+  };
+
+  const handleAddToBatch = () => {
+    if (!currentTask.question) return;
+    setBatchTasks((prev) => [...prev, { ...currentTask }]);
+    setCurrentTask(emptyTask());
+  };
+
+  const handleRemoveFromBatch = (index: number) => {
+    setBatchTasks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveBatch = async () => {
+    if (batchTasks.length === 0) return;
+    setBatchSaving(true);
+    try {
+      await apiFetch("/api/admin/tasks/batch", {
+        method: "POST",
+        body: JSON.stringify({
+          datasetId: batchDatasetId ? Number(batchDatasetId) : null,
+          tasks: batchTasks.map((t) => ({
+            type: t.type,
+            dataPayload: {
+              question: t.question,
+              content: t.content,
+              options: [t.option1, t.option2, t.option3, t.option4].filter(Boolean),
+            },
+            correctAnswer: t.correctAnswer || null,
+            difficulty: t.difficulty,
+            pointsReward: t.difficulty === "hard" ? 30 : t.difficulty === "medium" ? 20 : 10,
+            isGolden: !!t.correctAnswer,
+          })),
+        }),
+      });
+      setBatchSaved(true);
+      setBatchTasks([emptyTask()]);
+      setTimeout(() => setBatchSaved(false), 3000);
+    } catch { /* ignore */ }
+    setBatchSaving(false);
   };
 
   const handleCreateDataset = async () => {
-    const dataset = await apiFetch("/api/datasets", {
-      method: "POST",
-      body: JSON.stringify({
-        name: datasetForm.name,
-        description: datasetForm.description,
-        category: datasetForm.category,
-        accessType: datasetForm.accessType,
-        qualityScore: datasetForm.qualityScore,
-        workflowMode: datasetForm.workflowMode,
-        votesRequired: datasetForm.votesRequired,
-        consensusThreshold: datasetForm.consensusThreshold,
-        tokenCost: datasetForm.tokenCost,
-        adsRequired: datasetForm.adsRequired,
-        price: datasetForm.price,
-        requestedTaskCount: datasetForm.taskCount,
-        importMode: "admin_generator",
-        tags: ["consensus", datasetForm.workflowMode],
-      }),
-    });
-    if (datasetForm.taskCount > 0) {
-      await apiFetch(`/api/datasets/${dataset.id}/generate-tasks`, {
+    try {
+      await apiFetch("/api/datasets", {
         method: "POST",
         body: JSON.stringify({
-          count: datasetForm.taskCount,
-          type: datasetForm.taskType,
-          options: datasetForm.taskType === "image" ? ["cat", "dog", "car", "person"] : ["positive", "negative", "neutral", "spam"],
+          name: datasetForm.name,
+          description: datasetForm.description,
+          category: datasetForm.category,
+          accessType: datasetForm.accessType,
+          workflowMode: datasetForm.workflowMode,
+          votesRequired: datasetForm.votesRequired,
+          consensusThreshold: datasetForm.consensusThreshold,
+          tokenCost: datasetForm.tokenCost,
+          adsRequired: datasetForm.adsRequired,
+          price: datasetForm.price || null,
+          lotteryPool: datasetForm.lotteryPool,
+          lotteryWinners: datasetForm.lotteryWinners,
+          completionTarget: datasetForm.completionTarget,
+          importMode: "manual",
+          requestedTaskCount: datasetForm.completionTarget,
+          tags: [datasetForm.category.toLowerCase(), "crowd-labeled"],
         }),
       });
-    }
-    setDatasetCreated(true);
-    setShowDatasetForm(false);
-    setTimeout(() => setDatasetCreated(false), 3000);
+      setDatasetSaved(true);
+      setDatasetForm({
+        name: "", description: "", category: "", accessType: "ads",
+        workflowMode: "supervisor_admin", votesRequired: 5, consensusThreshold: 0.99,
+        tokenCost: 0, adsRequired: 3, price: 0, lotteryPool: 0, lotteryWinners: 0, completionTarget: 100,
+      });
+      setTimeout(() => setDatasetSaved(false), 3000);
+      apiFetch("/api/admin/stats").then(setAdminStats).catch(() => {});
+    } catch { /* ignore */ }
   };
 
-  const handleNightlyPublish = async () => {
-    await apiFetch("/api/datasets/nightly-publish", { method: "POST" });
+  const handleApproveDataset = async (id: number) => {
+    try {
+      const result = await apiFetch(`/api/admin/datasets/${id}/approve-publish`, {
+        method: "POST",
+        body: JSON.stringify({ adminId: 1 }),
+      });
+      setApprovalResult(`Dataset #${id} published. Lottery: ${result.lotteryResult ? `${result.lotteryResult.winnersCount} winners` : "none"}. Payments: ${result.pendingPaymentsCreated}`);
+    } catch (e: any) {
+      setApprovalResult(`Error: ${e.message}`);
+    }
   };
+
+  const navItems: { id: ActiveSection; label: string; icon: React.ElementType }[] = [
+    { id: "stats", label: "Stats", icon: BarChart2 },
+    { id: "tasks", label: "Tasks", icon: ClipboardList },
+    { id: "datasets", label: "Datasets", icon: Database },
+    { id: "payments", label: "Payments", icon: Wallet },
+    { id: "approve", label: "Approve", icon: CheckCircle },
+    { id: "users", label: "Users", icon: Users },
+  ];
 
   return (
     <Layout>
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 pb-8">
         {/* Header */}
         <div className="flex items-center gap-2 pt-2">
           <Settings className="w-5 h-5 text-primary" />
           <h1 className="text-xl font-black">Admin Panel</h1>
-          <Button size="sm" variant="outline" className="ml-auto text-xs" onClick={handleNightlyPublish}>
-            Nightly Publish
-          </Button>
         </div>
 
-        {/* Analytics Overview */}
-        <Card className="border-primary/30 bg-primary/5">
-          <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="w-3.5 h-3.5" />
-              Platform Analytics
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {analyticsLoading ? (
-              <div className="grid grid-cols-2 gap-2">
-                {Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-12" />)}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: "Total Users", value: analytics?.totalUsers.toLocaleString() },
-                  { label: "Active Today", value: analytics?.activeUsersToday.toLocaleString() },
-                  { label: "Total Tasks", value: analytics?.totalTasks.toLocaleString() },
-                  { label: "Done Today", value: analytics?.tasksCompletedToday.toLocaleString() },
-                  { label: "Avg Accuracy", value: `${analytics?.averageAccuracy?.toFixed(1)}%` },
-                  { label: "TON Paid", value: `${analytics?.tonPaidOut?.toFixed(3)} TON` },
-                  { label: "Total Datasets", value: analytics?.totalDatasets.toLocaleString() },
-                  { label: "Downloads", value: analytics?.totalDownloads.toLocaleString() },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-card/50 rounded-lg p-2 text-center">
-                    <p className="text-lg font-black">{value}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Nav Tabs */}
+        <div className="grid grid-cols-3 gap-1">
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSection(id)}
+              className={cn(
+                "flex flex-col items-center gap-0.5 p-2 rounded-lg text-[10px] font-bold uppercase transition-colors",
+                activeSection === id
+                  ? "bg-primary/20 text-primary border border-primary/40"
+                  : "bg-muted/20 text-muted-foreground border border-border/20"
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
 
-        {/* Task Stats */}
-        {taskStats && (
-          <Card className="border-border/50">
-            <CardHeader className="p-3 pb-2">
-              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Target className="w-3.5 h-3.5" />
-                Task Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {[
-                  { label: "Image", value: taskStats.byType.image },
-                  { label: "Text", value: taskStats.byType.text },
-                  { label: "Classify", value: taskStats.byType.classification },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-muted/30 rounded-lg p-2">
-                    <p className="font-black text-lg">{value}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 text-[11px] text-muted-foreground text-center">
-                {taskStats.goldenCount} golden tasks • {taskStats.completionRate.toFixed(1)}% completion rate
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Create Task */}
-        <Card className="border-secondary/30">
-          <CardHeader className="p-3 pb-2 border-b border-border/30">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Plus className="w-3.5 h-3.5" />
-                Create Task
-              </CardTitle>
-              {taskCreated && <Badge variant="outline" className="text-secondary border-secondary/40 text-[10px]"><CheckCircle className="w-3 h-3 mr-1" />Created!</Badge>}
-            </div>
-          </CardHeader>
-          <CardContent className="p-3 pt-2 space-y-2">
-            {!showTaskForm ? (
-              <Button size="sm" className="w-full text-xs" variant="outline" onClick={() => setShowTaskForm(true)}>
-                <Plus className="w-3 h-3 mr-1" /> New Task
-              </Button>
-            ) : (
-              <div className="space-y-2">
-                <select
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
-                  value={taskForm.type}
-                  onChange={(e) => setTaskForm({ ...taskForm, type: e.target.value as any })}
-                >
-                  <option value="text">Text</option>
-                  <option value="image">Image</option>
-                  <option value="classification">Classification</option>
-                </select>
-                <input
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
-                  placeholder="Question / prompt"
-                  value={taskForm.question}
-                  onChange={(e) => setTaskForm({ ...taskForm, question: e.target.value })}
-                />
+        {/* ─── STATS ─────────────────────────────────── */}
+        {activeSection === "stats" && (
+          <div className="space-y-3">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="p-3 pb-1">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Platform Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
                 <div className="grid grid-cols-2 gap-2">
-                  {["option1", "option2", "option3", "option4"].map((opt, i) => (
-                    <input
-                      key={opt}
-                      className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
-                      placeholder={`Option ${i + 1}`}
-                      value={taskForm[opt as keyof typeof taskForm] as string}
-                      onChange={(e) => setTaskForm({ ...taskForm, [opt]: e.target.value })}
-                    />
+                  {[
+                    { label: "Total Users", value: adminStats?.totalUsers?.toLocaleString() ?? "—" },
+                    { label: "Total Tasks", value: adminStats?.totalTasks?.toLocaleString() ?? "—" },
+                    { label: "Responses", value: adminStats?.totalResponses?.toLocaleString() ?? "—" },
+                    { label: "Datasets", value: adminStats?.totalDatasets?.toLocaleString() ?? "—" },
+                    { label: "Pending Payments", value: adminStats?.pendingPayments?.toString() ?? "—" },
+                    { label: "TON Paid Out", value: adminStats ? `${adminStats.totalPaidTon.toFixed(4)} TON` : "—" },
+                    { label: "Active Today", value: analytics?.activeUsersToday?.toLocaleString() ?? "—" },
+                    { label: "Avg Accuracy", value: analytics ? `${analytics.averageAccuracy?.toFixed(1)}%` : "—" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="bg-card/60 rounded-lg p-2 text-center">
+                      <p className="text-lg font-black">{value}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase">{label}</p>
+                    </div>
                   ))}
                 </div>
-                <input
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
-                  placeholder="Correct answer (optional, for golden tasks)"
-                  value={taskForm.correctAnswer}
-                  onChange={(e) => setTaskForm({ ...taskForm, correctAnswer: e.target.value })}
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
-                    value={taskForm.difficulty}
-                    onChange={(e) => setTaskForm({ ...taskForm, difficulty: e.target.value as any })}
-                  >
-                    <option value="easy">Easy (10pts)</option>
-                    <option value="medium">Medium (20pts)</option>
-                    <option value="hard">Hard (30pts)</option>
-                  </select>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="flex-1 text-xs" onClick={handleCreateTask} disabled={createTask.isPending || !taskForm.question}>
-                      Create
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-xs" onClick={() => setShowTaskForm(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ─── TASK CREATOR ──────────────────────────── */}
+        {activeSection === "tasks" && (
+          <div className="space-y-3">
+            {batchSaved && (
+              <div className="bg-secondary/20 border border-secondary/40 rounded-lg p-2 text-center text-xs text-secondary font-bold flex items-center justify-center gap-2">
+                <CheckCircle className="w-4 h-4" /> Batch saved successfully!
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Create Dataset */}
-        <Card className="border-accent/30">
-          <CardHeader className="p-3 pb-2 border-b border-border/30">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Database className="w-3.5 h-3.5" />
-                Create Dataset
-              </CardTitle>
-              {datasetCreated && <Badge variant="outline" className="text-secondary border-secondary/40 text-[10px]"><CheckCircle className="w-3 h-3 mr-1" />Created!</Badge>}
-            </div>
-          </CardHeader>
-          <CardContent className="p-3 pt-2 space-y-2">
-            {!showDatasetForm ? (
-              <Button size="sm" className="w-full text-xs" variant="outline" onClick={() => setShowDatasetForm(true)}>
-                <Plus className="w-3 h-3 mr-1" /> New Dataset
-              </Button>
-            ) : (
-              <div className="space-y-2">
+            <Card className="border-secondary/30">
+              <CardHeader className="p-3 pb-2 border-b border-border/30">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <Plus className="w-3.5 h-3.5" />
+                  Task Creator
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 space-y-2">
                 <input
                   className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
-                  placeholder="Dataset name"
-                  value={datasetForm.name}
-                  onChange={(e) => setDatasetForm({ ...datasetForm, name: e.target.value })}
+                  placeholder="Dataset ID (optional)"
+                  value={batchDatasetId}
+                  onChange={(e) => setBatchDatasetId(e.target.value)}
                 />
-                <textarea
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground resize-none"
-                  rows={2}
-                  placeholder="Description"
-                  value={datasetForm.description}
-                  onChange={(e) => setDatasetForm({ ...datasetForm, description: e.target.value })}
-                />
-                <input
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
-                  placeholder="Category (e.g., NLP, Computer Vision)"
-                  value={datasetForm.category}
-                  onChange={(e) => setDatasetForm({ ...datasetForm, category: e.target.value })}
-                />
+
+                {/* Two-column layout: form left, preview right */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Left: Form fields */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] uppercase text-muted-foreground font-bold">Fields</p>
+                    <select
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                      value={currentTask.type}
+                      onChange={(e) => setCurrentTask({ ...currentTask, type: e.target.value as TaskEntry["type"] })}
+                    >
+                      <option value="text">Text</option>
+                      <option value="image">Image</option>
+                      <option value="classification">Classification</option>
+                    </select>
+                    <input
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                      placeholder="Question / instruction"
+                      value={currentTask.question}
+                      onChange={(e) => setCurrentTask({ ...currentTask, question: e.target.value })}
+                    />
+                    <textarea
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground resize-none"
+                      rows={2}
+                      placeholder="Content (text, image URL, etc.)"
+                      value={currentTask.content}
+                      onChange={(e) => setCurrentTask({ ...currentTask, content: e.target.value })}
+                    />
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(["option1", "option2", "option3", "option4"] as const).map((opt, i) => (
+                        <input
+                          key={opt}
+                          className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                          placeholder={`Option ${i + 1}`}
+                          value={currentTask[opt]}
+                          onChange={(e) => setCurrentTask({ ...currentTask, [opt]: e.target.value })}
+                        />
+                      ))}
+                    </div>
+                    <input
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                      placeholder="Correct answer (golden task)"
+                      value={currentTask.correctAnswer}
+                      onChange={(e) => setCurrentTask({ ...currentTask, correctAnswer: e.target.value })}
+                    />
+                    <select
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                      value={currentTask.difficulty}
+                      onChange={(e) => setCurrentTask({ ...currentTask, difficulty: e.target.value as TaskEntry["difficulty"] })}
+                    >
+                      <option value="easy">Easy — 10 pts</option>
+                      <option value="medium">Medium — 20 pts</option>
+                      <option value="hard">Hard — 30 pts</option>
+                    </select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs"
+                      onClick={handleAddToBatch}
+                      disabled={!currentTask.question}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add to batch
+                    </Button>
+                  </div>
+
+                  {/* Right: Live preview */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1">
+                      <Eye className="w-3 h-3" /> Preview
+                    </p>
+                    <div className="rounded-lg border border-border/50 bg-card/40 p-3 min-h-[160px]">
+                      {currentTask.question ? (
+                        <div className="space-y-2">
+                          <Badge variant="outline" className="text-[9px]">{currentTask.type}</Badge>
+                          <p className="text-xs font-bold">{currentTask.question}</p>
+                          {currentTask.content && (
+                            <p className="text-[11px] text-muted-foreground bg-muted/30 rounded p-1.5 italic line-clamp-3">
+                              {currentTask.content}
+                            </p>
+                          )}
+                          {[currentTask.option1, currentTask.option2, currentTask.option3, currentTask.option4].filter(Boolean).map((opt, i) => (
+                            <div
+                              key={i}
+                              className={cn(
+                                "text-[11px] p-1.5 rounded border",
+                                opt === currentTask.correctAnswer
+                                  ? "border-secondary/60 bg-secondary/10 text-secondary font-bold"
+                                  : "border-border/40 bg-muted/20"
+                              )}
+                            >
+                              {opt}
+                            </div>
+                          ))}
+                          <p className="text-[9px] text-muted-foreground uppercase">
+                            {currentTask.difficulty} • {currentTask.difficulty === "hard" ? 30 : currentTask.difficulty === "medium" ? 20 : 10} pts
+                            {currentTask.correctAnswer && " • Golden ✓"}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground/50 text-center pt-8">Fill the form to preview</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Batch Queue */}
+            {batchTasks.length > 0 && (
+              <Card className="border-border/50">
+                <CardHeader className="p-3 pb-2 border-b border-border/30">
+                  <CardTitle className="text-xs uppercase text-muted-foreground flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      Batch Queue ({batchTasks.length})
+                    </span>
+                    <Button
+                      size="sm"
+                      className="text-[10px] h-6 px-2"
+                      onClick={handleSaveBatch}
+                      disabled={batchSaving}
+                    >
+                      {batchSaving ? "Saving..." : `Save ${batchTasks.length} Tasks`}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 divide-y divide-border/20 max-h-48 overflow-y-auto">
+                  {batchTasks.map((task, i) => (
+                    <div key={i} className="flex items-center justify-between p-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold truncate">{task.question || "(empty)"}</p>
+                        <p className="text-[10px] text-muted-foreground">{task.type} • {task.difficulty}</p>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveFromBatch(i)}
+                        className="ml-2 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* ─── CREATE DATASET ────────────────────────── */}
+        {activeSection === "datasets" && (
+          <Card className="border-accent/30">
+            <CardHeader className="p-3 pb-2 border-b border-border/30">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <Database className="w-3.5 h-3.5" />
+                  Create Dataset
+                </CardTitle>
+                {datasetSaved && (
+                  <Badge variant="outline" className="text-secondary border-secondary/40 text-[10px]">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Saved!
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-3 space-y-2">
+              <input
+                className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                placeholder="Dataset name *"
+                value={datasetForm.name}
+                onChange={(e) => setDatasetForm({ ...datasetForm, name: e.target.value })}
+              />
+              <textarea
+                className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground resize-none"
+                rows={2}
+                placeholder="Description *"
+                value={datasetForm.description}
+                onChange={(e) => setDatasetForm({ ...datasetForm, description: e.target.value })}
+              />
+              <input
+                className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                placeholder="Category (NLP, Vision, Audio…)"
+                value={datasetForm.category}
+                onChange={(e) => setDatasetForm({ ...datasetForm, category: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-2">
                 <select
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                  className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
                   value={datasetForm.accessType}
                   onChange={(e) => setDatasetForm({ ...datasetForm, accessType: e.target.value as any })}
                 >
                   <option value="free">Free</option>
                   <option value="ads">Unlock with Ads</option>
-                  <option value="premium">Premium (Paid)</option>
+                  <option value="premium">Premium</option>
                 </select>
                 <select
-                  className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                  className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
                   value={datasetForm.workflowMode}
                   onChange={(e) => setDatasetForm({ ...datasetForm, workflowMode: e.target.value })}
                 >
-                  <option value="consensus">Consensus only</option>
-                  <option value="supervisor_admin">Consensus + Supervisor + Admin</option>
-                  <option value="admin">Consensus + Admin</option>
+                  <option value="consensus">Crowd only</option>
+                  <option value="supervisor_admin">Crowd + Controller + Admin</option>
+                  <option value="admin">Crowd + Admin</option>
                 </select>
-                <div className="grid grid-cols-2 gap-2">
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-[9px] text-muted-foreground mb-1">Votes required</p>
                   <input
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
                     type="number"
-                    placeholder="Votes required"
+                    className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
                     value={datasetForm.votesRequired}
                     onChange={(e) => setDatasetForm({ ...datasetForm, votesRequired: Number(e.target.value) })}
                   />
+                </div>
+                <div>
+                  <p className="text-[9px] text-muted-foreground mb-1">Threshold</p>
                   <input
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
                     type="number"
                     step="0.01"
                     min="0"
                     max="1"
-                    placeholder="Consensus threshold"
+                    className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
                     value={datasetForm.consensusThreshold}
                     onChange={(e) => setDatasetForm({ ...datasetForm, consensusThreshold: Number(e.target.value) })}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-[9px] text-muted-foreground mb-1">Ads req.</p>
                   <input
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
                     type="number"
-                    placeholder="Token cost"
-                    value={datasetForm.tokenCost}
-                    onChange={(e) => setDatasetForm({ ...datasetForm, tokenCost: Number(e.target.value) })}
-                  />
-                  <input
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
-                    type="number"
-                    placeholder="Ads req."
+                    className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
                     value={datasetForm.adsRequired}
                     onChange={(e) => setDatasetForm({ ...datasetForm, adsRequired: Number(e.target.value) })}
                   />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[9px] text-muted-foreground mb-1">Fee (€)</p>
                   <input
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
                     type="number"
                     step="0.01"
-                    placeholder="Fee"
+                    className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
                     value={datasetForm.price}
                     onChange={(e) => setDatasetForm({ ...datasetForm, price: Number(e.target.value) })}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
-                    value={datasetForm.taskType}
-                    onChange={(e) => setDatasetForm({ ...datasetForm, taskType: e.target.value as any })}
-                  >
-                    <option value="image">Image tasks</option>
-                    <option value="text">Text tasks</option>
-                    <option value="classification">Classification tasks</option>
-                  </select>
+                <div>
+                  <p className="text-[9px] text-muted-foreground mb-1">Completion target</p>
                   <input
-                    className="p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
                     type="number"
-                    placeholder="Tasks to generate"
-                    value={datasetForm.taskCount}
-                    onChange={(e) => setDatasetForm({ ...datasetForm, taskCount: Number(e.target.value) })}
+                    className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                    value={datasetForm.completionTarget}
+                    onChange={(e) => setDatasetForm({ ...datasetForm, completionTarget: Number(e.target.value) })}
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  For very large runs, create the campaign here and add tasks in batches from upload/API/import. Each batch can become consensus work for Telegram players.
+              </div>
+
+              {/* Lottery section */}
+              <div className="border border-yellow-400/30 rounded-lg p-3 bg-yellow-400/5 space-y-2">
+                <p className="text-[10px] uppercase font-bold text-yellow-400 flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5" />
+                  Lottery (optional)
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={handleCreateDataset}
-                    disabled={createDataset.isPending || !datasetForm.name || !datasetForm.description}
-                  >
-                    Create Dataset
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-xs" onClick={() => setShowDatasetForm(false)}>
-                    Cancel
-                  </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[9px] text-muted-foreground mb-1">Prize pool (TON)</p>
+                    <input
+                      type="number"
+                      step="0.001"
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                      value={datasetForm.lotteryPool}
+                      onChange={(e) => setDatasetForm({ ...datasetForm, lotteryPool: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground mb-1">Winners</p>
+                    <input
+                      type="number"
+                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
+                      value={datasetForm.lotteryWinners}
+                      onChange={(e) => setDatasetForm({ ...datasetForm, lotteryWinners: Number(e.target.value) })}
+                    />
+                  </div>
                 </div>
+                {datasetForm.lotteryPool > 0 && datasetForm.lotteryWinners > 0 && (
+                  <p className="text-[10px] text-yellow-400/70">
+                    {datasetForm.lotteryWinners} winner{datasetForm.lotteryWinners > 1 ? "s" : ""} will each receive ~{(datasetForm.lotteryPool / datasetForm.lotteryWinners).toFixed(4)} TON when dataset is approved.
+                  </p>
+                )}
+              </div>
+
+              <Button
+                className="w-full text-xs font-bold"
+                onClick={handleCreateDataset}
+                disabled={!datasetForm.name || !datasetForm.description || !datasetForm.category}
+              >
+                Create Dataset
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ─── PENDING PAYMENTS ──────────────────────── */}
+        {activeSection === "payments" && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-black flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-primary" />
+                Pending Payments
+              </h2>
+              <Button size="sm" variant="outline" className="text-xs" onClick={loadPendingPayments}>
+                Refresh
+              </Button>
+            </div>
+            {pendingLoading ? (
+              <div className="space-y-2">
+                {Array(3).fill(0).map((_, i) => <Skeleton key={i} className="h-20" />)}
+              </div>
+            ) : pendingPayments.length === 0 ? (
+              <Card className="border-border/30">
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  No pending payments — all caught up!
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {pendingPayments.map(({ payment, user }) => (
+                  <Card key={payment.id} className="border-yellow-400/30 bg-yellow-400/5">
+                    <CardContent className="p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold">{user?.username ?? `User #${payment.userId}`}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground">
+                            {payment.walletAddress.slice(0, 10)}…{payment.walletAddress.slice(-8)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-black text-yellow-400">{payment.amountTon.toFixed(6)} TON</p>
+                          <p className="text-[9px] text-muted-foreground">{payment.reason}</p>
+                        </div>
+                      </div>
+                      <input
+                        className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground"
+                        placeholder="TX hash (optional)"
+                        value={txHashInput[payment.id] ?? ""}
+                        onChange={(e) => setTxHashInput((prev) => ({ ...prev, [payment.id]: e.target.value }))}
+                      />
+                      <Button
+                        size="sm"
+                        className="w-full text-xs bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 hover:bg-yellow-400/30"
+                        onClick={() => handleMarkPaid(payment.id)}
+                        disabled={markingPaid === payment.id}
+                      >
+                        <Coins className="w-3 h-3 mr-1" />
+                        {markingPaid === payment.id ? "Marking..." : "Mark as Paid"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
 
-        {/* User List */}
-        <Card className="border-border/50">
-          <CardHeader className="p-3 pb-2 border-b border-border/30">
-            <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <Users className="w-3.5 h-3.5" />
-              Recent Users
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 divide-y divide-border/20">
-            {users?.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-3">
-                <div>
-                  <p className="text-sm font-bold">{user.username}</p>
-                  <p className="text-[10px] text-muted-foreground">#{user.telegramId}</p>
-                </div>
-                <div className="text-right">
-                  <Badge variant="outline" className={cn("text-[9px]",
-                    user.level === "expert" ? "text-yellow-400 border-yellow-400/40" :
-                    user.level === "pro" ? "text-primary border-primary/40" :
-                    "text-muted-foreground"
-                  )}>
-                    {user.level}
-                  </Badge>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{user.points.toLocaleString()} pts</p>
-                </div>
+        {/* ─── APPROVE DATASETS ──────────────────────── */}
+        {activeSection === "approve" && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-black flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-secondary" />
+              Dataset Approval
+            </h2>
+            {approvalResult && (
+              <div className="bg-secondary/10 border border-secondary/30 rounded-lg p-3 text-xs text-secondary">
+                {approvalResult}
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Approving a dataset publishes it, runs lottery draw (if configured), and creates pending TON payments for all contributors.
+            </p>
+            <div className="space-y-2">
+              {[10, 11, 12, 13, 14, 15, 16, 17, 18, 19].map((id) => (
+                <Card key={id} className="border-border/40">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold">Dataset #{id}</p>
+                      <p className="text-[10px] text-muted-foreground">100,000 tasks • status: active</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
+                      onClick={() => handleApproveDataset(id)}
+                    >
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Approve
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground text-center">
+              Admin approval is required before any dataset is published. This step is always mandatory.
+            </p>
+          </div>
+        )}
+
+        {/* ─── USERS ─────────────────────────────────── */}
+        {activeSection === "users" && (
+          <Card className="border-border/50">
+            <CardHeader className="p-3 pb-2 border-b border-border/30">
+              <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                <Users className="w-3.5 h-3.5" />
+                All Users
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 divide-y divide-border/20 max-h-[60vh] overflow-y-auto">
+              {users?.map((user) => (
+                <div key={user.id} className="flex items-center justify-between p-3">
+                  <div>
+                    <p className="text-sm font-bold">{user.username}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">
+                      #{user.telegramId ?? "—"} · ref: {(user as any).referralCode ?? "—"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <Badge
+                      variant="outline"
+                      className={cn("text-[9px]",
+                        user.level === "expert" ? "text-yellow-400 border-yellow-400/40" :
+                        user.level === "pro" ? "text-primary border-primary/40" :
+                        "text-muted-foreground"
+                      )}
+                    >
+                      {user.level}
+                    </Badge>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{user.points.toLocaleString()} pts</p>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </Layout>
   );

@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins } from "lucide-react";
+import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins, Gift, Copy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -66,6 +66,10 @@ export default function Profile() {
 
   const [rewards, setRewards] = useState<RewardsData | null>(null);
   const [showAdChallenge, setShowAdChallenge] = useState(false);
+  const [referralStats, setReferralStats] = useState<any>(null);
+  const [referralInput, setReferralInput] = useState("");
+  const [referralMsg, setReferralMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!isOwnProfile || !userId) return;
@@ -73,7 +77,37 @@ export default function Profile() {
       .then((r) => r.json())
       .then(setRewards)
       .catch(() => {});
+    fetch(`${API_BASE}/api/referral/stats/${userId}`)
+      .then((r) => r.json())
+      .then(setReferralStats)
+      .catch(() => {});
   }, [userId, isOwnProfile]);
+
+  const handleCopyReferral = () => {
+    if (!referralStats?.referralCode) return;
+    const link = `https://t.me/putitup_bot?start=${referralStats.referralCode}`;
+    navigator.clipboard?.writeText(link).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleApplyReferral = async () => {
+    if (!referralInput) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/referral/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, referralCode: referralInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Error");
+      setReferralMsg(`Referral applied! Referred by @${data.referrerUsername}`);
+      setReferralInput("");
+    } catch (e: any) {
+      setReferralMsg(e.message);
+    }
+    setTimeout(() => setReferralMsg(null), 4000);
+  };
 
   const handleConvert = async () => {
     if (!user || user.points < 1000) return;
@@ -213,6 +247,107 @@ export default function Profile() {
                 <Zap className="w-3 h-3 mr-1" />
                 Watch ad to recharge (+50)
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Referral Section */}
+        {isOwnProfile && (
+          <Card className="border-primary/30 bg-primary/5">
+            <CardHeader className="p-3 pb-2 border-b border-border/30">
+              <CardTitle className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Gift className="w-3.5 h-3.5 text-primary" />
+                Referral Program
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 space-y-3">
+              {/* Your referral code */}
+              {referralStats?.referralCode && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Your referral code</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-muted/40 border border-border/50 rounded-lg p-2 font-mono text-sm font-black tracking-widest text-primary">
+                      {referralStats.referralCode}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-primary/40 text-primary hover:bg-primary/10 flex-shrink-0"
+                      onClick={handleCopyReferral}
+                    >
+                      {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Share your link and earn <span className="text-primary font-bold">+500 pts</span> for each friend who completes 10 tasks.
+                  </p>
+                </div>
+              )}
+
+              {/* Referral stats */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-card/60 rounded-lg p-2 text-center">
+                  <p className="text-xl font-black text-primary">{referralStats?.referralCount ?? 0}</p>
+                  <p className="text-[9px] uppercase text-muted-foreground">Friends referred</p>
+                </div>
+                <div className="bg-card/60 rounded-lg p-2 text-center">
+                  <p className="text-xl font-black text-secondary">{referralStats?.referralBonusEarned ?? 0}</p>
+                  <p className="text-[9px] uppercase text-muted-foreground">Bonus pts earned</p>
+                </div>
+              </div>
+
+              {/* Referred users list */}
+              {referralStats?.referrals?.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Users className="w-3 h-3" /> Your referrals
+                  </p>
+                  <div className="divide-y divide-border/20 rounded-lg border border-border/30 overflow-hidden">
+                    {referralStats.referrals.slice(0, 5).map((r: any) => (
+                      <div key={r.id} className="flex items-center justify-between px-3 py-2">
+                        <p className="text-xs font-bold">@{r.username}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[10px] text-muted-foreground">{r.tasksCompleted}/10 tasks</p>
+                          {r.bonusEarned && (
+                            <Badge variant="outline" className="text-[8px] text-secondary border-secondary/40">
+                              +500 pts
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Apply referral code */}
+              {!referralStats?.referredBy && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground">Apply a referral code</p>
+                  <div className="flex gap-2">
+                    <input
+                      className="flex-1 p-2 rounded-lg bg-muted/40 border border-border/50 text-xs placeholder:text-muted-foreground font-mono"
+                      placeholder="Enter code"
+                      value={referralInput}
+                      onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-shrink-0 text-xs"
+                      onClick={handleApplyReferral}
+                      disabled={!referralInput}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                  {referralMsg && (
+                    <p className={cn("text-[10px]", referralMsg.startsWith("Error") || referralMsg.startsWith("User") ? "text-destructive" : "text-secondary")}>
+                      {referralMsg}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

@@ -29,7 +29,7 @@ export const datasetsTable = pgTable("datasets", {
   workflowMode: text("workflow_mode").notNull().default("consensus"),
   status: text("status").notNull().default("draft"),
   votesRequired: integer("votes_required").notNull().default(3),
-  consensusThreshold: real("consensus_threshold").notNull().default(0.8),
+  consensusThreshold: real("consensus_threshold").notNull().default(0.99),
   supervisorId: integer("supervisor_id"),
   importMode: text("import_mode").notNull().default("manual"),
   requestedTaskCount: integer("requested_task_count").notNull().default(0),
@@ -39,6 +39,10 @@ export const datasetsTable = pgTable("datasets", {
   size: text("size"),
   recordCount: integer("record_count"),
   tags: text("tags").array().notNull().default([]),
+  lotteryPool: real("lottery_pool").notNull().default(0),
+  lotteryWinners: integer("lottery_winners").notNull().default(0),
+  completionTarget: integer("completion_target").notNull().default(100),
+  lotteryDrawnAt: timestamp("lottery_drawn_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

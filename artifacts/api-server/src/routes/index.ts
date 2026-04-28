@@ -10,6 +10,8 @@ import leaderboardRouter from "./leaderboard";
 import analyticsRouter from "./analytics";
 import clientsRouter from "./clients";
 import authRouter from "./auth";
+import adminRouter from "./admin";
+import referralRouter from "./referral";
 
 const router: IRouter = Router();
 
@@ -24,5 +26,7 @@ router.use(rewardsRouter);
 router.use(leaderboardRouter);
 router.use(analyticsRouter);
 router.use(clientsRouter);
+router.use(adminRouter);
+router.use(referralRouter);
 
 export default router;

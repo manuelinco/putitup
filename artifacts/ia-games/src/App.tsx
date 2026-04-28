@@ -13,6 +13,7 @@ import Tasks from "@/pages/tasks";
 import Leaderboard from "@/pages/leaderboard";
 import Profile from "@/pages/profile";
 import Admin from "@/pages/admin";
+import AdminClaim from "@/pages/admin-claim";
 import Controller from "@/pages/supervisor";
 
 const queryClient = new QueryClient({
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/profile/:id" component={Profile} />
       <Route path="/admin" component={Admin} />
+      <Route path="/admin-claim" component={AdminClaim} />
       <Route path="/controller" component={Controller} />
       <Route component={NotFound} />
     </Switch>
@@ -45,11 +47,12 @@ function AppInner() {
 
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
   const currentPath = window.location.pathname.replace(basePath, "") || "/";
-  const protectedPath = currentPath.startsWith("/tasks")
+  const protectedPath = (currentPath.startsWith("/tasks")
     || currentPath.startsWith("/profile")
     || currentPath.startsWith("/leaderboard")
     || currentPath.startsWith("/admin")
-    || currentPath.startsWith("/controller");
+    || currentPath.startsWith("/controller"))
+    && !currentPath.startsWith("/admin-claim");
 
   if (isLoading) {
     return (

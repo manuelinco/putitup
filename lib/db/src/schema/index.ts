@@ -7,3 +7,5 @@ export * from "./activityEvents";
 export * from "./clients";
 export * from "./datasetAccess";
 export * from "./rewardLedger";
+export * from "./lotteryDraws";
+export * from "./pendingPayments";
