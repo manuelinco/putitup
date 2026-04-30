@@ -1,9 +1,11 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
+import { useBusinessAuth } from "@/hooks/useBusinessAuth";
 import {
   ArrowUpRight,
   BarChart3,
@@ -40,6 +42,15 @@ const stats = [
 ];
 
 export default function Dashboard() {
+  const { client } = useBusinessAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!client) navigate("/login");
+  }, [client]);
+
+  if (!client) return null;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Nav />
@@ -47,14 +58,14 @@ export default function Dashboard() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Dashboard</h1>
+              <h1 className="text-3xl font-bold">Welcome, {client.name.split(" ")[0]}</h1>
               <p className="mt-1 text-muted-foreground text-sm">
-                Manage your datasets and account
+                {client.company ? `${client.company} · ` : ""}{client.email}
               </p>
             </div>
-            <Badge variant="outline" className="gap-1.5">
-              <Lock className="h-3 w-3" />
-              Demo — Login Required
+            <Badge variant="outline" className="gap-1.5 text-secondary border-secondary/40">
+              <ShieldCheck className="h-3 w-3" />
+              Verified Account
             </Badge>
           </div>
 

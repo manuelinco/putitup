@@ -11,7 +11,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Home", icon: LayoutDashboard },
     { href: "/tasks", label: "Tasks", icon: Gamepad2 },
     { href: "/leaderboard", label: "Top", icon: Trophy },
-    { href: user ? `/profile/${user.id}` : "/profile/0", label: "Profile", icon: User },
+    { href: user ? `/profile/${user.id}` : "/profile/setup", label: "Profile", icon: User },
   ];
 
   return (

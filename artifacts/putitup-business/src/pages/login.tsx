@@ -35,6 +35,7 @@ export default function Login() {
       localStorage.setItem("pb_client_email", data.client.email);
       localStorage.setItem("pb_client_name", `${data.client.firstName} ${data.client.lastName}`);
       localStorage.setItem("pb_client_company", data.client.company ?? "");
+      window.dispatchEvent(new Event("storage"));
       navigate("/dashboard");
     } catch {
       setError("Connection error — please try again");

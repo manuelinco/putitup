@@ -93,7 +93,7 @@ export default function Tasks() {
   };
 
   const handleSubmit = async () => {
-    if (!selected || !task || submitted) return;
+    if (!selected || !task || submitted || !userId) return;
     setTimerActive(false);
     impact("medium");
     const responseTimeMs = Date.now() - startTime.current;

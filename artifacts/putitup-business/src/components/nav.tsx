@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Database, LayoutDashboard, LogIn, Menu, X, Zap } from "lucide-react";
+import { Database, LayoutDashboard, LogIn, LogOut, Menu, User, X, Zap } from "lucide-react";
 import { useState } from "react";
+import { useBusinessAuth } from "@/hooks/useBusinessAuth";
 
 const links = [
   { href: "/catalog", label: "Dataset Catalog" },
@@ -12,6 +13,7 @@ const links = [
 export default function Nav() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
+  const { client, logout } = useBusinessAuth();
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
@@ -43,17 +45,43 @@ export default function Nav() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Link href="/login">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <LogIn className="h-4 w-4" />
-              Log In
-            </Button>
-          </Link>
-          <Link href="/register">
-            <Button size="sm" className="gap-2">
-              Get Started
-            </Button>
-          </Link>
+          {client ? (
+            <>
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <User className="h-4 w-4" />
+                <span className="font-medium text-foreground">{client.name}</span>
+              </span>
+              <Link href="/dashboard">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Dashboard
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-2 text-muted-foreground hover:text-destructive"
+                onClick={logout}
+              >
+                <LogOut className="h-4 w-4" />
+                Log Out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Log In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button size="sm" className="gap-2">
+                  Get Started
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -78,17 +106,40 @@ export default function Nav() {
               </Link>
             ))}
             <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-              <Link href="/login" onClick={() => setOpen(false)}>
-                <Button variant="outline" size="sm" className="w-full gap-2">
-                  <LogIn className="h-4 w-4" />
-                  Log In
-                </Button>
-              </Link>
-              <Link href="/register" onClick={() => setOpen(false)}>
-                <Button size="sm" className="w-full">
-                  Get Started
-                </Button>
-              </Link>
+              {client ? (
+                <>
+                  <p className="text-xs text-muted-foreground px-1">Logged in as <span className="font-bold text-foreground">{client.name}</span></p>
+                  <Link href="/dashboard" onClick={() => setOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full gap-2">
+                      <LayoutDashboard className="h-4 w-4" />
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full gap-2 text-muted-foreground"
+                    onClick={() => { logout(); setOpen(false); }}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Log Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link href="/login" onClick={() => setOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full gap-2">
+                      <LogIn className="h-4 w-4" />
+                      Log In
+                    </Button>
+                  </Link>
+                  <Link href="/register" onClick={() => setOpen(false)}>
+                    <Button size="sm" className="w-full">
+                      Get Started
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
         </div>
