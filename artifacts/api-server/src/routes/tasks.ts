@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, notInArray, desc } from "drizzle-orm";
+import { eq, and, notInArray, desc, gte, lt, sql } from "drizzle-orm";
 import { db, tasksTable, taskResponsesTable, rewardLedgerTable, usersTable } from "@workspace/db";
 import {
   ListTasksQueryParams,
@@ -70,24 +70,49 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
 
   const { userId } = parsed.data;
 
-  const answeredIds = await db
+  // Fetch answered task IDs for this user
+  const answeredRows = await db
     .select({ taskId: taskResponsesTable.taskId })
     .from(taskResponsesTable)
     .where(eq(taskResponsesTable.userId, userId));
+  const answeredTaskIds = answeredRows.map((r) => r.taskId);
 
-  const answeredTaskIds = answeredIds.map((r) => r.taskId);
+  // Get max ID for random pivot (index scan — fast on 11M rows)
+  const [maxRow] = await db
+    .select({ maxId: sql<number>`max(id)`, minId: sql<number>`min(id)` })
+    .from(tasksTable)
+    .where(eq(tasksTable.status, "active"));
 
-  let task;
-  if (answeredTaskIds.length > 0) {
-    const [t] = await db
+  if (!maxRow?.maxId) {
+    res.status(404).json({ error: "No tasks available" });
+    return;
+  }
+
+  const minId = Number(maxRow.minId);
+  const maxId = Number(maxRow.maxId);
+  const pivotId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
+
+  const baseFilter =
+    answeredTaskIds.length > 0
+      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds))
+      : eq(tasksTable.status, "active");
+
+  // Try from random pivot forward (index scan)
+  let [task] = await db
+    .select()
+    .from(tasksTable)
+    .where(and(baseFilter, gte(tasksTable.id, pivotId)))
+    .orderBy(tasksTable.id)
+    .limit(1);
+
+  // Wrap around: try from the beginning if nothing found after pivot
+  if (!task) {
+    [task] = await db
       .select()
       .from(tasksTable)
-      .where(and(notInArray(tasksTable.id, answeredTaskIds), eq(tasksTable.status, "active")))
+      .where(and(baseFilter, lt(tasksTable.id, pivotId)))
+      .orderBy(tasksTable.id)
       .limit(1);
-    task = t;
-  } else {
-    const [t] = await db.select().from(tasksTable).where(eq(tasksTable.status, "active")).limit(1);
-    task = t;
   }
 
   if (!task) {
