@@ -37,6 +37,30 @@ router.get("/tasks/stats", async (_req, res): Promise<void> => {
   });
 });
 
+const DATASET_OPTIONS: Record<number, string[]> = {
+  10: ["positive", "negative", "neutral"],
+  11: ["purchase", "browse", "return", "complaint", "inquiry"],
+  12: ["vehicle", "person", "building", "animal", "nature"],
+  13: ["PER", "ORG", "LOC", "DATE", "MISC"],
+  14: ["A1", "A2", "Both good", "Both poor"],
+  15: ["correct", "minor errors", "major errors", "completely wrong"],
+  16: ["cardiology", "neurology", "oncology", "emergency", "general"],
+  17: ["complaint", "question", "return", "compliment", "billing"],
+  18: ["enthusiastic", "negative", "neutral", "sarcastic"],
+  19: ["excellent", "good", "fair", "low"],
+};
+
+function enrichTask(task: typeof tasksTable.$inferSelect) {
+  const payload = (task.dataPayload ?? {}) as Record<string, unknown>;
+  if (!payload.options && task.datasetId && DATASET_OPTIONS[task.datasetId]) {
+    return {
+      ...task,
+      dataPayload: { ...payload, options: DATASET_OPTIONS[task.datasetId] },
+    };
+  }
+  return task;
+}
+
 router.get("/tasks/next", async (req, res): Promise<void> => {
   const parsed = GetNextTaskQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -71,7 +95,7 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(task);
+  res.json(enrichTask(task));
 });
 
 router.get("/tasks", async (req, res): Promise<void> => {

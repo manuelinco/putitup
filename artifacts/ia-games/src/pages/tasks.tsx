@@ -52,7 +52,9 @@ export default function Tasks() {
   const [shake, setShake] = useState(false);
   const [bounce, setBounce] = useState(false);
   const [totalToday, setTotalToday] = useState(0);
+  const [tasksCompletedCount, setTasksCompletedCount] = useState(0);
   const [showAdChallenge, setShowAdChallenge] = useState(false);
+  const [adPending, setAdPending] = useState(false);
   const startTime = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -113,7 +115,12 @@ export default function Tasks() {
         setShake(true);
         setTimeout(() => setShake(false), 500);
       }
+      const newCount = tasksCompletedCount + 1;
+      setTasksCompletedCount(newCount);
       setTotalToday((t) => t + 1);
+      if (newCount % 10 === 0) {
+        setAdPending(true);
+      }
       refetchStats();
       queryClient.invalidateQueries({ queryKey: getGetUserStatsQueryKey(userId) });
       refreshUser();
@@ -122,6 +129,10 @@ export default function Tasks() {
 
   const handleNext = () => {
     impact("light");
+    if (adPending) {
+      setShowAdChallenge(true);
+      return;
+    }
     refetchTask();
   };
 
@@ -134,10 +145,12 @@ export default function Tasks() {
 
   const handleAdComplete = async () => {
     setShowAdChallenge(false);
+    setAdPending(false);
     await watchAd.mutateAsync({ data: { userId, adType: "rewarded" } });
     refetchStats();
     refreshUser();
     notification("success");
+    refetchTask();
   };
 
   const handleAdFail = () => {
@@ -146,7 +159,9 @@ export default function Tasks() {
   };
 
   useTelegramMainButton(
-    submitted ? "Next Task ›" : "Submit Answer",
+    submitted
+      ? adPending ? "Watch Ad to Continue" : "Next Task ›"
+      : "Submit Answer",
     submitted ? handleNext : handleSubmit,
     {
       visible: !!task && !isLoading,
@@ -324,10 +339,10 @@ export default function Tasks() {
               </p>
 
               {/* Text snippet */}
-              {task.type === "text" && payload?.text && (
+              {task.type === "text" && (payload?.content ?? payload?.text) && (
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
                   <p className="text-xs text-muted-foreground italic leading-relaxed">
-                    "{payload.text as string}"
+                    "{(payload?.content ?? payload?.text) as string}"
                   </p>
                 </div>
               )}
@@ -398,11 +413,14 @@ export default function Tasks() {
                 </Button>
               ) : (
                 <Button
-                  className="w-full font-black h-12 text-base"
+                  className={cn(
+                    "w-full font-black h-12 text-base",
+                    adPending ? "border-yellow-400/60 text-yellow-400 hover:bg-yellow-400/10" : ""
+                  )}
                   variant="outline"
                   onClick={handleNext}
                 >
-                  Next Task
+                  {adPending ? "📺 Watch Ad to Continue" : "Next Task"}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               )}
@@ -410,16 +428,12 @@ export default function Tasks() {
           </Card>
         )}
 
-        {/* Extra task slot via ad */}
-        {!isLoading && energy >= 20 && (
-          <button
-            onClick={() => setShowAdChallenge(true)}
-            disabled={watchAd.isPending}
-            className="w-full py-2.5 rounded-xl border border-dashed border-primary/30 text-[11px] font-bold text-muted-foreground hover:border-primary/60 hover:text-primary transition-all"
-          >
-            <Zap className="w-3 h-3 inline mr-1 text-primary" />
-            Watch ad for +50 energy
-          </button>
+        {/* Ad ogni 10 task — hint visivo */}
+        {!isLoading && !adPending && (
+          <div className="text-center text-[10px] text-muted-foreground/50">
+            <Zap className="w-2.5 h-2.5 inline mr-1" />
+            Ad every 10 tasks · {10 - (tasksCompletedCount % 10)} tasks until next ad
+          </div>
         )}
       </div>
     </Layout>
