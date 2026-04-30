@@ -81,8 +81,8 @@ router.post("/responses", async (req, res): Promise<void> => {
     return;
   }
 
-  let isCorrect: boolean | null = null;
-  if (task.correctAnswer != null) {
+  let isCorrect: boolean;
+  if (task.isGolden && task.correctAnswer != null) {
     isCorrect =
       answer.trim().toLowerCase() ===
       task.correctAnswer.trim().toLowerCase();

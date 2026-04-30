@@ -48,11 +48,21 @@ const DATASET_OPTIONS: Record<number, string[]> = {
   17: ["complaint", "question", "return", "compliment", "billing"],
   18: ["enthusiastic", "negative", "neutral", "sarcastic"],
   19: ["excellent", "good", "fair", "low"],
+  20: ["person", "car", "dog", "cat", "chair", "bird", "horse", "bus", "truck", "airplane"],
+  21: ["positive", "negative", "neutral", "mixed"],
+  22: ["spam", "not spam"],
+  23: ["relevant", "irrelevant", "partially relevant"],
+  24: ["A wins", "B wins", "tie", "both bad"],
+  25: ["safe", "unsafe", "borderline"],
+  26: ["agree", "disagree", "neutral"],
+  27: ["high quality", "medium quality", "low quality"],
+  28: ["correct", "incorrect", "partial"],
+  29: ["yes", "no", "maybe"],
 };
 
 function enrichTask(task: typeof tasksTable.$inferSelect) {
   const payload = (task.dataPayload ?? {}) as Record<string, unknown>;
-  if (!payload.options && task.datasetId && DATASET_OPTIONS[task.datasetId]) {
+  if (task.datasetId && DATASET_OPTIONS[task.datasetId]) {
     return {
       ...task,
       dataPayload: { ...payload, options: DATASET_OPTIONS[task.datasetId] },
