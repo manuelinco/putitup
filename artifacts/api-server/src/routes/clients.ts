@@ -1,11 +1,80 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, clientsTable, datasetsTable, datasetAccessTable } from "@workspace/db";
+import { pbkdf2Sync, randomBytes } from "crypto";
 
 const router: IRouter = Router();
 const TOKENS_PER_AD = 2;
 const CLIENT_DAILY_AD_CAP = 30;
 const AD_COOLDOWN_MS = 30_000;
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = pbkdf2Sync(password, salt, 10000, 64, "sha512").toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  const [salt, hash] = stored.split(":");
+  if (!salt || !hash) return false;
+  const verify = pbkdf2Sync(password, salt, 10000, 64, "sha512").toString("hex");
+  return hash === verify;
+}
+
+router.post("/clients/login", async (req, res): Promise<void> => {
+  const { email, password } = req.body ?? {};
+  if (!email || !password) {
+    res.status(400).json({ error: "email and password are required" });
+    return;
+  }
+
+  const [client] = await db
+    .select()
+    .from(clientsTable)
+    .where(eq(clientsTable.email, String(email).trim().toLowerCase()));
+
+  if (!client || !client.passwordHash) {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
+  if (!verifyPassword(String(password), client.passwordHash)) {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
+  const { passwordHash: _ph, ...safeClient } = client;
+  res.json({ client: safeClient });
+});
+
+router.post("/clients/set-password", async (req, res): Promise<void> => {
+  const adminUser = process.env["ADMIN_USERNAME"];
+  const adminPass = process.env["ADMIN_PASSWORD"];
+  const { adminUsername, adminPassword, email, password } = req.body ?? {};
+
+  if (adminUsername !== adminUser || adminPassword !== adminPass) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const [client] = await db
+    .select()
+    .from(clientsTable)
+    .where(eq(clientsTable.email, String(email).trim().toLowerCase()));
+
+  if (!client) {
+    res.status(404).json({ error: "Client not found" });
+    return;
+  }
+
+  const passwordHash = hashPassword(String(password));
+  await db
+    .update(clientsTable)
+    .set({ passwordHash })
+    .where(eq(clientsTable.id, client.id));
+
+  res.json({ ok: true });
+});
 
 router.post("/clients", async (req, res): Promise<void> => {
   const { firstName, lastName, email, phone, address, company, walletAddress } = req.body ?? {};

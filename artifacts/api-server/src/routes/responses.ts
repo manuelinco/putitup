@@ -163,9 +163,6 @@ router.post("/responses", async (req, res): Promise<void> => {
     };
   }
 
-  const newXp = user.xp + xpEarned;
-  const newLevel = computeLevel(newXp);
-  const leveledUp = newLevel !== user.level;
   const newStreak = user.streak + 1;
   const newEnergy = Math.max(0, user.energy - MIN_ENERGY_PER_TASK);
 
@@ -185,12 +182,18 @@ router.post("/responses", async (req, res): Promise<void> => {
 
   const accuracyBonus = newScore >= ACCURACY_BONUS_THRESHOLD;
 
+  const earnedPts = isCorrect ? pointsEarned + (accuracyBonus ? 5 : 0) : 0;
+  const earnedXp = isCorrect ? xpEarned : 0;
+  const finalXp = user.xp + earnedXp;
+  const finalLevel = computeLevel(finalXp);
+  const didLevelUp = finalLevel !== user.level;
+
   await db
     .update(usersTable)
     .set({
-      points: user.points + pointsEarned + (accuracyBonus ? 5 : 0),
-      xp: newXp,
-      level: newLevel,
+      points: user.points + earnedPts,
+      xp: finalXp,
+      level: finalLevel,
       streak: newStreak,
       score: Math.round(newScore * 10) / 10,
       energy: newEnergy,
@@ -207,26 +210,26 @@ router.post("/responses", async (req, res): Promise<void> => {
     type: "task_completed",
     userId: user.id,
     username: user.username,
-    description: `${user.username} completed a ${task.difficulty} ${task.type} task and earned ${pointsEarned} pts`,
-    metadata: { taskId, pointsEarned, xpEarned },
+    description: `${user.username} completed a ${task.difficulty} ${task.type} task and earned ${earnedPts} pts`,
+    metadata: { taskId, pointsEarned: earnedPts, xpEarned: earnedXp },
   });
 
-  if (leveledUp) {
+  if (didLevelUp) {
     await db.insert(activityEventsTable).values({
       type: "level_up",
       userId: user.id,
       username: user.username,
-      description: `${user.username} leveled up to ${newLevel}!`,
-      metadata: { newLevel },
+      description: `${user.username} leveled up to ${finalLevel}!`,
+      metadata: { newLevel: finalLevel },
     });
   }
 
   res.status(201).json({
     response,
-    pointsEarned: pointsEarned + (accuracyBonus ? 5 : 0),
-    xpEarned,
-    accuracyBonus,
-    newLevel: leveledUp ? newLevel : null,
+    pointsEarned: earnedPts,
+    xpEarned: earnedXp,
+    accuracyBonus: isCorrect && accuracyBonus,
+    newLevel: didLevelUp ? finalLevel : null,
     streakBonus: newStreak > 0 && newStreak % 7 === 0,
   });
 });

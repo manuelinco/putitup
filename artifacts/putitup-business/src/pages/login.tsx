@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,14 +7,42 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Lock, Mail, Zap } from "lucide-react";
 
+const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export default function Login() {
+  const [, navigate] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Invalid email or password");
+        return;
+      }
+      const data = await res.json();
+      localStorage.setItem("pb_client_id", String(data.client.id));
+      localStorage.setItem("pb_client_email", data.client.email);
+      localStorage.setItem("pb_client_name", `${data.client.firstName} ${data.client.lastName}`);
+      localStorage.setItem("pb_client_company", data.client.company ?? "");
+      navigate("/dashboard");
+    } catch {
+      setError("Connection error — please try again");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -75,17 +103,12 @@ export default function Login() {
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
-            <Button type="submit" className="w-full" disabled>
-              Log In
-              <span className="ml-2 text-xs opacity-70">(coming soon)</span>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Logging in..." : "Log In"}
             </Button>
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -96,10 +119,6 @@ export default function Login() {
           </p>
         </CardContent>
       </Card>
-
-      <p className="mt-8 text-xs text-muted-foreground">
-        Authentication will be activated in a future release.
-      </p>
     </div>
   );
 }

@@ -158,16 +158,7 @@ export default function Tasks() {
     notification("error");
   };
 
-  useTelegramMainButton(
-    submitted
-      ? adPending ? "Watch Ad to Continue" : "Next Task ›"
-      : "Submit Answer",
-    submitted ? handleNext : handleSubmit,
-    {
-      visible: !!task && !isLoading,
-      active: submitted ? true : !!selected && !submitResponse.isPending,
-    }
-  );
+  useTelegramMainButton("", () => {}, { visible: false });
 
   const payload = task?.dataPayload as Record<string, unknown> | undefined;
   const options = payload?.options as string[] | undefined;

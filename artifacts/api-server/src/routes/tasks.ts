@@ -120,6 +120,8 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
     return;
   }
 
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.set("Pragma", "no-cache");
   res.json(enrichTask(task));
 });
 

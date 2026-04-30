@@ -18,6 +18,7 @@ export const clientsTable = pgTable("clients", {
   address: text("address").notNull(),
   company: text("company"),
   walletAddress: text("wallet_address"),
+  passwordHash: text("password_hash"),
   tokenBalance: integer("token_balance").notNull().default(0),
   adsWatchedToday: integer("ads_watched_today").notNull().default(0),
   totalAdsWatched: integer("total_ads_watched").notNull().default(0),
