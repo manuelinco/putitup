@@ -9,6 +9,25 @@ import { useState } from "react";
 
 const plans = [
   {
+    id: "free",
+    name: "Free",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    description: "Start exploring PUTITUP datasets at zero cost. Watch ads to unlock downloads.",
+    badge: "No card needed",
+    features: [
+      { label: "Up to 5 basic datasets/month", included: true },
+      { label: "Watch 5 ads per dataset download", included: true },
+      { label: "CSV & JSON export", included: true },
+      { label: "Community support", included: true },
+      { label: "MEDIUM or PREMIUM datasets", included: false },
+      { label: "API access", included: false },
+      { label: "Custom dataset requests", included: false },
+      { label: "Priority queue", included: false },
+      { label: "Dedicated account manager", included: false },
+    ],
+  },
+  {
     id: "starter",
     name: "Starter",
     monthlyPrice: 9.99,
@@ -106,7 +125,7 @@ export default function Pricing() {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid gap-6 lg:grid-cols-4">
             {plans.map((plan) => (
               <Card
                 key={plan.id}
@@ -118,7 +137,7 @@ export default function Pricing() {
               >
                 {plan.badge && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className={plan.badge === "Most Popular" ? "bg-primary" : ""}>
+                    <Badge className={plan.badge === "Most Popular" ? "bg-primary" : "bg-secondary text-secondary-foreground"}>
                       {plan.badge === "Most Popular" && <Zap className="mr-1 h-3 w-3" />}
                       {plan.badge}
                     </Badge>
@@ -131,11 +150,16 @@ export default function Pricing() {
                     {plan.monthlyPrice !== null ? (
                       <div className="flex items-end gap-1">
                         <span className="text-4xl font-bold">
-                          €{yearly ? plan.yearlyPrice : plan.monthlyPrice}
+                          {plan.monthlyPrice === 0 ? "€0" : `€${yearly ? plan.yearlyPrice : plan.monthlyPrice}`}
                         </span>
-                        <span className="mb-1 text-muted-foreground">
-                          /{yearly ? "yr" : "mo"}
-                        </span>
+                        {plan.monthlyPrice > 0 && (
+                          <span className="mb-1 text-muted-foreground">
+                            /{yearly ? "yr" : "mo"}
+                          </span>
+                        )}
+                        {plan.monthlyPrice === 0 && (
+                          <span className="mb-1 text-muted-foreground">/forever</span>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-end gap-1">
@@ -164,6 +188,12 @@ export default function Pricing() {
                       <Button variant="outline" className="w-full" disabled>
                         Contact Sales
                       </Button>
+                    ) : plan.id === "free" ? (
+                      <Link href="/register">
+                        <Button className="w-full" variant="secondary">
+                          Start for Free
+                        </Button>
+                      </Link>
                     ) : (
                       <Link href="/register">
                         <Button

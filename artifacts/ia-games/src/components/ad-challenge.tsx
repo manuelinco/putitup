@@ -9,75 +9,50 @@ interface AdChallengeProps {
   adDuration?: number;
 }
 
-type ChallengeType = "dot" | "word";
-type Phase = "ad" | "dot_challenge" | "word_challenge" | "done" | "failed";
+type Phase = "ad" | "dot_active" | "done" | "failed";
 
-const WORD_CHALLENGES = [
-  { partial: "DO_", options: ["G", "T", "R"], answer: "G", full: "DOG" },
-  { partial: "CA_", options: ["T", "P", "R"], answer: "T", full: "CAT" },
-  { partial: "SU_", options: ["N", "M", "B"], answer: "N", full: "SUN" },
-  { partial: "RE_", options: ["D", "G", "P"], answer: "D", full: "RED" },
-  { partial: "BI_", options: ["G", "D", "T"], answer: "G", full: "BIG" },
-  { partial: "RU_", options: ["N", "G", "T"], answer: "N", full: "RUN" },
-];
-
-function shuffle<T>(arr: T[]): T[] {
-  return [...arr].sort(() => Math.random() - 0.5);
-}
-
-export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDuration = 20 }: AdChallengeProps) {
+export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDuration = 25 }: AdChallengeProps) {
   const [phase, setPhase] = useState<Phase>("ad");
   const [adProgress, setAdProgress] = useState(0);
   const [dotPos, setDotPos] = useState({ x: 50, y: 50 });
   const [dotTimer, setDotTimer] = useState(3);
-  const [wordChallenge, setWordChallenge] = useState(WORD_CHALLENGES[0]);
-  const [wordOptions, setWordOptions] = useState<string[]>([]);
-  const [wordTimer, setWordTimer] = useState(5);
-  const [challengesScheduled, setChallengesScheduled] = useState<number[]>([]);
-  const [challengesDone, setChallengesDone] = useState(0);
-  const [feedbackText, setFeedbackText] = useState("");
+  const [dotCount, setDotCount] = useState(0);
+  const [requiredDots] = useState(() => 1 + Math.floor(Math.random() * 2));
   const [skipAvailable, setSkipAvailable] = useState(false);
+  const [feedbackKey, setFeedbackKey] = useState(0);
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  const adStartRef = useRef(Date.now());
   const phaseRef = useRef<Phase>("ad");
-  const challengesDoneRef = useRef(0);
-  const scheduledRef = useRef<number[]>([]);
+  const dotCountRef = useRef(0);
+  const adStartRef = useRef(Date.now());
+  const scheduledDotsRef = useRef<number[]>([]);
+  const progressRef = useRef(0);
 
   phaseRef.current = phase;
-  challengesDoneRef.current = challengesDone;
+  dotCountRef.current = dotCount;
 
-  const triggerDotChallenge = useCallback(() => {
-    const x = 15 + Math.random() * 70;
-    const y = 20 + Math.random() * 60;
+  const spawnDot = useCallback(() => {
+    const margin = 18;
+    const x = margin + Math.random() * (100 - margin * 2);
+    const y = margin + Math.random() * (100 - margin * 2);
     setDotPos({ x, y });
     setDotTimer(3);
-    setPhase("dot_challenge");
+    setPhase("dot_active");
+    phaseRef.current = "dot_active";
   }, []);
-
-  const triggerWordChallenge = useCallback(() => {
-    const wc = WORD_CHALLENGES[Math.floor(Math.random() * WORD_CHALLENGES.length)];
-    setWordChallenge(wc);
-    setWordOptions(shuffle(wc.options));
-    setWordTimer(5);
-    setPhase("word_challenge");
-  }, []);
-
-  const triggerChallenge = useCallback(() => {
-    const types: ChallengeType[] = ["dot", "word"];
-    const type = types[Math.floor(Math.random() * types.length)];
-    if (type === "dot") {
-      triggerDotChallenge();
-    } else {
-      triggerWordChallenge();
-    }
-  }, [triggerDotChallenge, triggerWordChallenge]);
 
   useEffect(() => {
-    const t1 = Math.floor(adDuration * 0.35);
-    const t2 = Math.floor(adDuration * 0.70);
-    setChallengesScheduled([t1, t2]);
-    scheduledRef.current = [t1, t2];
-  }, [adDuration]);
+    const minTime = adDuration * 0.15;
+    const maxTime = adDuration * 0.80;
+    const n = requiredDots;
+    const dots: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const t = minTime + Math.random() * (maxTime - minTime);
+      dots.push(parseFloat(t.toFixed(2)));
+    }
+    dots.sort((a, b) => a - b);
+    scheduledDotsRef.current = dots;
+  }, [adDuration, requiredDots]);
 
   useEffect(() => {
     if (phase !== "ad") return;
@@ -85,15 +60,15 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDu
       const elapsed = (Date.now() - adStartRef.current) / 1000;
       const progress = Math.min((elapsed / adDuration) * 100, 100);
       setAdProgress(progress);
+      progressRef.current = progress;
 
-      if (progress >= 85) setSkipAvailable(true);
+      if (progress >= 85 && !skipAvailable) setSkipAvailable(true);
 
-      const elapsedSec = Math.floor(elapsed);
-      const pending = scheduledRef.current;
-      if (pending.length > 0 && elapsedSec >= pending[0] && challengesDoneRef.current < 2) {
-        scheduledRef.current = pending.slice(1);
+      const pending = scheduledDotsRef.current;
+      if (pending.length > 0 && elapsed >= pending[0] && phaseRef.current === "ad") {
+        scheduledDotsRef.current = pending.slice(1);
         clearInterval(interval);
-        triggerChallenge();
+        spawnDot();
         return;
       }
 
@@ -102,50 +77,35 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDu
         setPhase("done");
         setTimeout(() => onComplete(), 400);
       }
-    }, 200);
+    }, 100);
     return () => clearInterval(interval);
-  }, [phase, adDuration, triggerChallenge, onComplete]);
+  }, [phase, adDuration, skipAvailable, spawnDot, onComplete]);
 
   useEffect(() => {
-    if (phase !== "dot_challenge") return;
+    if (phase !== "dot_active") return;
     if (dotTimer <= 0) {
       setPhase("failed");
-      setTimeout(() => onFail(), 600);
+      setTimeout(() => onFail(), 700);
       return;
     }
     const t = setTimeout(() => setDotTimer((d) => d - 1), 1000);
     return () => clearTimeout(t);
   }, [phase, dotTimer, onFail]);
 
-  useEffect(() => {
-    if (phase !== "word_challenge") return;
-    if (wordTimer <= 0) {
-      setPhase("failed");
-      setTimeout(() => onFail(), 600);
-      return;
-    }
-    const t = setTimeout(() => setWordTimer((w) => w - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, wordTimer, onFail]);
-
   const handleDotTap = () => {
-    if (phase !== "dot_challenge") return;
-    setFeedbackText("✓ Got it!");
-    setChallengesDone((c) => c + 1);
-    adStartRef.current = Date.now() - (adProgress / 100) * adDuration * 1000;
-    setPhase("ad");
-  };
+    if (phase !== "dot_active") return;
+    const newCount = dotCountRef.current + 1;
+    setDotCount(newCount);
+    setFeedbackKey((k) => k + 1);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 900);
 
-  const handleWordOption = (opt: string) => {
-    if (phase !== "word_challenge") return;
-    if (opt === wordChallenge.answer) {
-      setFeedbackText(`✓ ${wordChallenge.full}!`);
-      setChallengesDone((c) => c + 1);
-      adStartRef.current = Date.now() - (adProgress / 100) * adDuration * 1000;
-      setPhase("ad");
+    if (newCount >= requiredDots && scheduledDotsRef.current.length === 0) {
+      setPhase("done");
+      setTimeout(() => onComplete(), 500);
     } else {
-      setPhase("failed");
-      setTimeout(() => onFail(), 600);
+      adStartRef.current = Date.now() - (progressRef.current / 100) * adDuration * 1000;
+      setPhase("ad");
     }
   };
 
@@ -155,11 +115,11 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDu
     setTimeout(() => onComplete(), 200);
   };
 
+  const skipCooldown = Math.max(0, Math.ceil(adDuration * 0.85 - (adProgress / 100) * adDuration));
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm relative">
-
-        {/* Ad container */}
         <div className={cn(
           "relative bg-card border rounded-2xl overflow-hidden transition-all",
           phase === "failed" ? "border-destructive shadow-[0_0_30px_rgba(239,68,68,0.4)]" :
@@ -184,36 +144,35 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDu
                   : "text-muted-foreground/40 cursor-not-allowed"
               )}
             >
-              {skipAvailable ? "Skip ›" : `Skip in ${Math.ceil((adDuration * 0.85) - (adProgress / 100) * adDuration)}s`}
+              {skipAvailable ? "Skip ›" : `Skip in ${skipCooldown}s`}
             </button>
           </div>
 
           {/* Ad body */}
-          <div className="relative h-52 bg-gradient-to-br from-primary/20 via-card to-accent/10 flex flex-col items-center justify-center gap-3 select-none">
-            {/* Background decoration */}
+          <div className="relative h-56 bg-gradient-to-br from-primary/20 via-card to-accent/10 flex flex-col items-center justify-center gap-3 select-none overflow-hidden">
             <div className="absolute top-4 right-4 w-20 h-20 bg-primary/10 rounded-full blur-2xl" />
             <div className="absolute bottom-4 left-4 w-16 h-16 bg-accent/10 rounded-full blur-2xl" />
 
-            {/* Brand content */}
             <div className="relative text-center space-y-2">
               <div className="text-4xl font-black bg-gradient-to-br from-primary via-accent to-secondary bg-clip-text text-transparent">
                 PUTITUP
               </div>
               <p className="text-xs text-muted-foreground font-semibold">Label AI Data · Earn Real Crypto</p>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <div className="px-3 py-1 rounded-full bg-primary/20 border border-primary/30 text-xs font-bold text-primary">
-                  {rewardText}
-                </div>
+              <div className="px-3 py-1 rounded-full bg-primary/20 border border-primary/30 text-xs font-bold text-primary inline-block mt-2">
+                {rewardText}
               </div>
             </div>
 
-            {/* Dot challenge overlay */}
-            {phase === "dot_challenge" && (
-              <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-start justify-center pt-2">
-                <div className="bg-card/90 border border-primary/40 rounded-xl px-3 py-1.5 text-center">
-                  <p className="text-[10px] font-black text-primary uppercase tracking-wider">
-                    TAP THE DOT · {dotTimer}s
-                  </p>
+            {/* Red dot anti-bot challenge */}
+            {phase === "dot_active" && (
+              <>
+                <div className="absolute inset-0 bg-black/20" />
+                <div className="absolute inset-x-0 top-1 flex justify-center z-10 pointer-events-none">
+                  <div className="bg-card/95 border border-red-500/60 rounded-full px-3 py-1 shadow-lg">
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-wider">
+                      ● Tap the red dot! · {dotTimer}s
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={handleDotTap}
@@ -222,66 +181,34 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDu
                     left: `${dotPos.x}%`,
                     top: `${dotPos.y}%`,
                     transform: "translate(-50%, -50%)",
+                    zIndex: 20,
                   }}
-                  className={cn(
-                    "w-14 h-14 rounded-full border-4 border-white/80 bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.8)]",
-                    "animate-pulse hover:scale-110 active:scale-95 transition-transform",
-                    "flex items-center justify-center cursor-pointer z-10"
-                  )}
-                >
-                  <span className="text-white font-black text-sm">{dotTimer}</span>
-                </button>
-              </div>
+                  className="w-12 h-12 rounded-full bg-red-500 border-[3px] border-white/90 shadow-[0_0_24px_6px_rgba(239,68,68,0.75)] animate-pulse hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                  aria-label="Tap the red dot"
+                />
+              </>
             )}
 
-            {/* Word challenge overlay */}
-            {phase === "word_challenge" && (
-              <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] flex flex-col items-center justify-center gap-3 px-4">
-                <div className="text-center space-y-1">
-                  <p className="text-[10px] font-black text-primary uppercase tracking-wider">
-                    Complete the word · {wordTimer}s
-                  </p>
-                  <p className="text-3xl font-black tracking-[0.3em] text-white">
-                    {wordChallenge.partial}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  {wordOptions.map((opt) => (
-                    <button
-                      key={opt}
-                      onClick={() => handleWordOption(opt)}
-                      className="w-14 h-14 rounded-xl border-2 border-primary/60 bg-primary/20 text-primary font-black text-xl hover:bg-primary/40 hover:scale-105 active:scale-95 transition-all"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
+            {/* Success flash */}
+            {showSuccess && (
+              <div key={feedbackKey} className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-green-500/20 border border-green-400/50 text-green-300 text-[11px] font-black px-3 py-1 rounded-full shadow">
+                ✓ Got it!
               </div>
             )}
 
             {/* Failed overlay */}
             {phase === "failed" && (
-              <div className="absolute inset-0 bg-destructive/30 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
+              <div className="absolute inset-0 bg-destructive/30 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-30">
                 <X className="w-12 h-12 text-destructive" />
-                <p className="font-black text-destructive text-sm">Challenge Failed!</p>
+                <p className="font-black text-destructive text-sm">Too slow! Ad restarting…</p>
               </div>
             )}
 
             {/* Done overlay */}
             {phase === "done" && (
-              <div className="absolute inset-0 bg-secondary/20 backdrop-blur-sm flex flex-col items-center justify-center gap-2">
-                <p className="text-3xl">✓</p>
+              <div className="absolute inset-0 bg-secondary/20 backdrop-blur-sm flex flex-col items-center justify-center gap-2 z-30">
+                <p className="text-3xl">✅</p>
                 <p className="font-black text-secondary text-sm">{rewardText} Unlocked!</p>
-              </div>
-            )}
-
-            {/* Feedback toast */}
-            {feedbackText && phase === "ad" && (
-              <div
-                key={challengesDone}
-                className="absolute top-2 left-1/2 -translate-x-1/2 bg-secondary/20 border border-secondary/40 text-secondary text-[10px] font-black px-3 py-1 rounded-full animate-fade-in"
-              >
-                {feedbackText}
               </div>
             )}
           </div>
@@ -294,21 +221,25 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks", adDu
             </div>
             <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-200"
+                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-100"
                 style={{ width: `${adProgress}%` }}
               />
             </div>
-            <div className="flex gap-2">
-              {[0, 1].map((i) => (
-                <div key={i} className={cn(
-                  "flex-1 h-1 rounded-full transition-all",
-                  challengesDone > i ? "bg-secondary" : "bg-muted/60"
-                )} />
-              ))}
+            <div className="flex items-center justify-between mt-1">
+              <div className="flex gap-1.5">
+                {Array.from({ length: requiredDots }).map((_, i) => (
+                  <div key={i} className={cn(
+                    "w-3 h-3 rounded-full border-2 transition-all",
+                    dotCount > i
+                      ? "bg-red-500 border-red-400 shadow-[0_0_6px_rgba(239,68,68,0.7)]"
+                      : "bg-muted/40 border-muted-foreground/30"
+                  )} />
+                ))}
+              </div>
+              <p className="text-[9px] text-muted-foreground">
+                {dotCount}/{requiredDots} dots caught
+              </p>
             </div>
-            <p className="text-[9px] text-muted-foreground text-center">
-              {challengesDone}/2 challenges passed
-            </p>
           </div>
         </div>
       </div>

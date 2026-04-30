@@ -25,6 +25,7 @@ import {
   Coins,
   BarChart2,
   ClipboardList,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +105,8 @@ export default function Admin() {
   const [markingPaid, setMarkingPaid] = useState<number | null>(null);
   const [txHashInput, setTxHashInput] = useState<Record<number, string>>({});
   const [approvalResult, setApprovalResult] = useState<string | null>(null);
+  const [allDatasets, setAllDatasets] = useState<{id: number; name: string; status: string; recordCount: number | null}[]>([]);
+  const [datasetsLoading, setDatasetsLoading] = useState(false);
 
   const [batchTasks, setBatchTasks] = useState<TaskEntry[]>([emptyTask()]);
   const [currentTask, setCurrentTask] = useState<TaskEntry>(emptyTask());
@@ -133,6 +136,15 @@ export default function Admin() {
       .then(setAdminStats)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (activeSection !== "approve") return;
+    setDatasetsLoading(true);
+    apiFetch("/api/datasets?limit=100")
+      .then((data: any) => setAllDatasets(Array.isArray(data) ? data : (data?.datasets ?? [])))
+      .catch(() => {})
+      .finally(() => setDatasetsLoading(false));
+  }, [activeSection]);
 
   const loadPendingPayments = async () => {
     setPendingLoading(true);
@@ -708,7 +720,7 @@ export default function Admin() {
           <div className="space-y-3">
             <h2 className="text-sm font-black flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-secondary" />
-              Dataset Approval
+              Dataset Approval &amp; Export
             </h2>
             {approvalResult && (
               <div className="bg-secondary/10 border border-secondary/30 rounded-lg p-3 text-xs text-secondary">
@@ -716,31 +728,60 @@ export default function Admin() {
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Approving a dataset publishes it, runs lottery draw (if configured), and creates pending TON payments for all contributors.
+              Approve to publish a dataset, run lottery, and create TON payments. Export JSON/CSV anytime for delivery to clients.
             </p>
-            <div className="space-y-2">
-              {[10, 11, 12, 13, 14, 15, 16, 17, 18, 19].map((id) => (
-                <Card key={id} className="border-border/40">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold">Dataset #{id}</p>
-                      <p className="text-[10px] text-muted-foreground">100,000 tasks • status: active</p>
+            {datasetsLoading && (
+              <div className="text-xs text-muted-foreground text-center py-4">Loading datasets…</div>
+            )}
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+              {(allDatasets.length > 0 ? allDatasets : Array.from({length: 20}, (_, i) => ({id: i + 10, name: `Dataset #${i + 10}`, status: 'active', recordCount: 1000000}))).map((ds) => (
+                <Card key={ds.id} className="border-border/40">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-xs font-bold">{ds.name || `Dataset #${ds.id}`}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          #{ds.id} · {(ds.recordCount ?? 0).toLocaleString()} tasks · {ds.status}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
+                        onClick={() => handleApproveDataset(ds.id)}
+                      >
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Approve
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
-                      onClick={() => handleApproveDataset(id)}
-                    >
-                      <CheckCircle className="w-3 h-3 mr-1" />
-                      Approve
-                    </Button>
+                    <div className="flex gap-2">
+                      <a
+                        href={`${API_BASE}/api/datasets/${ds.id}/export?format=json`}
+                        download
+                        className="flex-1"
+                      >
+                        <Button size="sm" variant="ghost" className="w-full text-[10px] h-7 border border-border/40 hover:border-primary/40 hover:text-primary">
+                          <Download className="w-3 h-3 mr-1" />
+                          Export JSON
+                        </Button>
+                      </a>
+                      <a
+                        href={`${API_BASE}/api/datasets/${ds.id}/export?format=csv`}
+                        download
+                        className="flex-1"
+                      >
+                        <Button size="sm" variant="ghost" className="w-full text-[10px] h-7 border border-border/40 hover:border-primary/40 hover:text-primary">
+                          <Download className="w-3 h-3 mr-1" />
+                          Export CSV
+                        </Button>
+                      </a>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground text-center">
-              Admin approval is required before any dataset is published. This step is always mandatory.
+              Admin approval is always required before publishing. All datasets (including non-business) must be approved.
             </p>
           </div>
         )}

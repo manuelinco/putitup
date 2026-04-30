@@ -18,23 +18,30 @@ import {
 
 const plans = [
   {
+    id: "free",
+    label: "Free",
+    price: "€0/mo",
+    description: "Up to 5 basic datasets/month — watch 5 ads per download",
+    highlight: "No credit card",
+  },
+  {
     id: "starter",
     label: "Starter",
     price: "€9.99/mo",
-    description: "BASIC datasets, 3 ads to unlock",
+    description: "Unlimited basic datasets, no ads",
   },
   {
     id: "business",
     label: "Business",
     price: "€19.99/mo",
-    description: "BASIC + MEDIUM, unlimited access",
+    description: "Premium datasets + custom dataset requests",
     popular: true,
   },
   {
     id: "premium",
     label: "Premium",
     price: "Custom",
-    description: "Full enterprise suite",
+    description: "Enterprise: unlimited everything + priority support",
   },
 ];
 
@@ -44,7 +51,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState("business");
+  const [selectedPlan, setSelectedPlan] = useState("free");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +79,7 @@ export default function Register() {
           {/* Plan selector */}
           <div className="mb-6">
             <p className="mb-3 text-sm font-medium text-foreground">Select a plan</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {plans.map((p) => (
                 <button
                   key={p.id}
@@ -89,6 +96,11 @@ export default function Register() {
                       Popular
                     </Badge>
                   )}
+                  {(p as any).highlight && (
+                    <Badge variant="secondary" className="absolute -top-2 left-1 text-[9px] px-1.5 py-0">
+                      {(p as any).highlight}
+                    </Badge>
+                  )}
                   <p className="text-xs font-semibold">{p.label}</p>
                   <p className="mt-0.5 text-[11px] font-medium text-primary">{p.price}</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground leading-tight">
@@ -97,6 +109,16 @@ export default function Register() {
                 </button>
               ))}
             </div>
+            {selectedPlan === "free" && (
+              <p className="mt-2 text-[11px] text-muted-foreground text-center bg-muted/30 rounded-lg py-1.5 px-3">
+                ✅ Free plan: no credit card required — watch 5 ads to download each dataset (max 5/month)
+              </p>
+            )}
+            {(selectedPlan === "business" || selectedPlan === "premium") && (
+              <p className="mt-2 text-[11px] text-muted-foreground text-center bg-muted/30 rounded-lg py-1.5 px-3">
+                ⭐ Includes custom dataset requests — our team will build datasets to your specifications
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -172,7 +194,7 @@ export default function Register() {
               </div>
             </div>
             <Button type="submit" className="w-full" disabled>
-              Create Account
+              {selectedPlan === "free" ? "Create Free Account" : `Start ${plans.find(p => p.id === selectedPlan)?.label} Plan`}
               <span className="ml-2 text-xs opacity-70">(coming soon)</span>
             </Button>
           </form>

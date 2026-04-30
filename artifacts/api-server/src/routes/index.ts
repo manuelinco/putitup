@@ -12,6 +12,8 @@ import clientsRouter from "./clients";
 import authRouter from "./auth";
 import adminRouter from "./admin";
 import referralRouter from "./referral";
+import telegramRouter from "./telegram";
+import exportRouter from "./export";
 
 const router: IRouter = Router();
 
@@ -28,5 +30,7 @@ router.use(analyticsRouter);
 router.use(clientsRouter);
 router.use(adminRouter);
 router.use(referralRouter);
+router.use(telegramRouter);
+router.use(exportRouter);
 
 export default router;

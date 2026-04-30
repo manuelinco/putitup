@@ -3,8 +3,8 @@
 ## Overview
 
 A dual-product human-in-the-loop AI data platform:
-1. **PUTITUP Telegram Mini App** (`ia-games` artifact) — Contributors label AI data, earn 0.00004 TON/task, with interactive anti-bot ad challenges. Telegram Mini App with TON wallet login.
-2. **PUTITUP Business Web Platform** (`putitup-business` artifact) — Enterprise clients browse and buy validated datasets. Dark elegant desktop-first design. Plans: Starter €9.99, Business €19.99/mo or €120/yr, Premium (custom).
+1. **PUTITUP Telegram Mini App** (`ia-games` artifact) — Contributors label AI data, earn 0.00004 TON/task, with anti-bot red dot challenge during ads. Telegram Mini App with TON wallet login + Tap to Play bot button.
+2. **PUTITUP Business Web Platform** (`putitup-business` artifact) — Enterprise clients browse and buy validated datasets. Plans: Free (€0, 5 ads/dataset), Starter €9.99, Business €19.99/mo (custom datasets), Premium.
 
 **Platform name:** PUTITUP everywhere — no "IA Games" references.
 
@@ -24,6 +24,23 @@ lib/
   api-client-react/     Auto-generated React Query hooks from OpenAPI
   db/                   Drizzle ORM schema + migrations
 ```
+
+## Database — 11M Real Tasks across 20 Datasets
+
+- **20 datasets** (IDs 10-29), all active with 99% consensus threshold
+- **11,000,000 total tasks** (1M per dataset × 10 original + 10 new)
+- **10 new datasets** (IDs 20-29): Image Object Classification, Facial Expression Recognition, Product Quality Control, Audio Speech Transcription EN/IT/FR, Audio Language Detection, Audio Emotion Recognition, Video Action Classification, Satellite Image Land Use, Medical Text Triage, Document OCR Validation
+- Image tasks use real Picsum URLs: `https://picsum.photos/seed/{N}/640/480`
+- Audio tasks use structured URLs: `https://samples.putitup.io/audio/...`
+- Video tasks use structured URLs: `https://samples.putitup.io/video/...`
+
+## Telegram Bot Integration
+
+- Webhook route: `POST /api/telegram/webhook` — handles `/start` → sends TAP TO PLAY button
+- Set webhook: `POST /api/telegram/set-webhook` with `{ webhookUrl }` body
+- Get webhook info: `GET /api/telegram/webhook-info`
+- Set menu button: `POST /api/telegram/set-menu-button` with `{ appUrl }` body
+- Bot: @Putituo_bot — TELEGRAM_BOT_TOKEN set as secret
 
 ## Mini App (ia-games) — Key Features
 
