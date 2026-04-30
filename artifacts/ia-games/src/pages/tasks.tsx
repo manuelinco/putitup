@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useGetNextTask, useSubmitResponse, useGetUserStats, useWatchAd, getGetUserStatsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
-import { useTelegramHaptic, useTelegramMainButton } from "@/hooks/useTelegram";
+import { useTelegramHaptic } from "@/hooks/useTelegram";
 import { Layout } from "@/components/layout";
 import { AdChallenge } from "@/components/ad-challenge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -158,7 +158,6 @@ export default function Tasks() {
     notification("error");
   };
 
-  useTelegramMainButton("", () => {}, { visible: false });
 
   const payload = task?.dataPayload as Record<string, unknown> | undefined;
   const options = payload?.options as string[] | undefined;
