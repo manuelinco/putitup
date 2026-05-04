@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import {
   useGetUser,
@@ -51,10 +51,19 @@ const missionTypeIcons: Record<string, React.ElementType> = {
 
 export default function Profile() {
   const params = useParams<{ id: string }>();
-  const userId = parseInt(params.id ?? "0", 10);
+  const [, navigate] = useLocation();
+  const rawId = params.id ?? "0";
+  const userId = parseInt(rawId, 10);
   const queryClient = useQueryClient();
   const { user: authUser, logout, source, wallet, refreshUser } = useAuth();
   const isOwnProfile = authUser?.id === userId;
+
+  // Redirect "setup" (unauthenticated placeholder) to real profile once logged in
+  useEffect(() => {
+    if ((rawId === "setup" || isNaN(userId)) && authUser?.id) {
+      navigate(`/profile/${authUser.id}`, { replace: true });
+    }
+  }, [rawId, userId, authUser?.id]);
 
   const { data: user, isLoading: userLoading } = useGetUser(userId, { query: { enabled: !!userId } });
   const { data: stats, isLoading: statsLoading } = useGetUserStats(userId, { query: { enabled: !!userId } });
