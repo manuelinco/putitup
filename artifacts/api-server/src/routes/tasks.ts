@@ -60,15 +60,49 @@ const DATASET_OPTIONS: Record<number, string[]> = {
   29: ["yes", "no", "maybe"],
 };
 
+const AUDIO_TRANSCRIPTION_OPTIONS = [
+  "Correct",
+  "Incorrect - Word Error",
+  "Incorrect - Missing Words",
+  "Incorrect - Extra Words",
+];
+
+const SENTIMENT_OPTIONS = ["positive", "negative", "neutral"];
+const BINARY_OPTIONS = ["Yes", "No"];
+
 function enrichTask(task: typeof tasksTable.$inferSelect) {
   const payload = (task.dataPayload ?? {}) as Record<string, unknown>;
-  if (task.datasetId && DATASET_OPTIONS[task.datasetId]) {
-    return {
-      ...task,
-      dataPayload: { ...payload, options: DATASET_OPTIONS[task.datasetId] },
-    };
+
+  let options: string[] | undefined =
+    Array.isArray(payload.options) ? (payload.options as string[]) : undefined;
+
+  if (!options && task.datasetId && DATASET_OPTIONS[task.datasetId]) {
+    options = DATASET_OPTIONS[task.datasetId];
   }
-  return task;
+
+  if (!options) {
+    const category = String(payload.category ?? "").toLowerCase();
+    const correctAnswer = String(task.correctAnswer ?? "").toLowerCase();
+    if (
+      payload.audioUrl ||
+      payload.transcript ||
+      category.includes("speech") ||
+      category.includes("transcription")
+    ) {
+      options = AUDIO_TRANSCRIPTION_OPTIONS;
+    } else if (
+      category.includes("sentiment") ||
+      correctAnswer === "positive" ||
+      correctAnswer === "negative" ||
+      correctAnswer === "neutral"
+    ) {
+      options = SENTIMENT_OPTIONS;
+    } else {
+      options = BINARY_OPTIONS;
+    }
+  }
+
+  return { ...task, dataPayload: { ...payload, options } };
 }
 
 router.get("/tasks/next", async (req, res): Promise<void> => {
