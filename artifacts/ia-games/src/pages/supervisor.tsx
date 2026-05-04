@@ -48,7 +48,7 @@ export default function Controller() {
     setLoading(true);
     try {
       const [sv, ad] = await Promise.all([
-        apiFetch("/api/tasks/review?stage=supervisor_review"),
+        apiFetch("/api/tasks/review?stage=controller_review"),
         apiFetch("/api/tasks/review?stage=admin_review"),
       ]);
       setTasks(sv ?? []);

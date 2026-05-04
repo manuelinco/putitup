@@ -15,6 +15,7 @@ import Profile from "@/pages/profile";
 import Admin from "@/pages/admin";
 import AdminClaim from "@/pages/admin-claim";
 import Controller from "@/pages/supervisor";
+import UploadPage from "@/pages/upload";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/admin-claim" component={AdminClaim} />
       <Route path="/controller" component={Controller} />
+      <Route path="/upload" component={UploadPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -51,7 +53,8 @@ function AppInner() {
     || currentPath.startsWith("/profile")
     || currentPath.startsWith("/leaderboard")
     || currentPath.startsWith("/admin")
-    || currentPath.startsWith("/controller"))
+    || currentPath.startsWith("/controller")
+    || currentPath.startsWith("/upload"))
     && !currentPath.startsWith("/admin-claim");
 
   if (isLoading) {

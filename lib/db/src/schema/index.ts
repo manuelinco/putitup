@@ -9,3 +9,4 @@ export * from "./datasetAccess";
 export * from "./rewardLedger";
 export * from "./lotteryDraws";
 export * from "./pendingPayments";
+export * from "./contributorDatasets";

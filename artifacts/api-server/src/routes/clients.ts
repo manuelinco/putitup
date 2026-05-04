@@ -76,6 +76,40 @@ router.post("/clients/set-password", async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+router.post("/clients/register", async (req, res): Promise<void> => {
+  const { name, company, email, password } = req.body ?? {};
+  if (!name || !email || !password) {
+    res.status(400).json({ error: "name, email and password are required" });
+    return;
+  }
+  if (String(password).length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const [existing] = await db.select().from(clientsTable).where(eq(clientsTable.email, normalizedEmail));
+  if (existing) {
+    res.status(409).json({ error: "Email already registered" });
+    return;
+  }
+  const nameParts = String(name).trim().split(/\s+/);
+  const firstName = nameParts[0] ?? "User";
+  const lastName = nameParts.slice(1).join(" ") || "-";
+  const passwordHash = hashPassword(String(password));
+  const [client] = await db.insert(clientsTable).values({
+    firstName,
+    lastName,
+    email: normalizedEmail,
+    phone: "—",
+    address: "—",
+    company: company ? String(company) : null,
+    passwordHash,
+    tokenBalance: 5,
+  }).returning();
+  const { passwordHash: _ph, ...safeClient } = client;
+  res.status(201).json({ client: safeClient });
+});
+
 router.post("/clients", async (req, res): Promise<void> => {
   const { firstName, lastName, email, phone, address, company, walletAddress } = req.body ?? {};
 
@@ -115,6 +149,51 @@ router.post("/clients", async (req, res): Promise<void> => {
   }).returning();
 
   res.status(201).json(client);
+});
+
+router.get("/clients/:id/datasets", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid client ID" });
+    return;
+  }
+  const rows = await db
+    .select({
+      accessId: datasetAccessTable.id,
+      datasetId: datasetAccessTable.datasetId,
+      method: datasetAccessTable.method,
+      tokensSpent: datasetAccessTable.tokensSpent,
+      createdAt: datasetAccessTable.createdAt,
+      dsId: datasetsTable.id,
+      dsName: datasetsTable.name,
+      dsDescription: datasetsTable.description,
+      dsCategory: datasetsTable.category,
+      dsQualityScore: datasetsTable.qualityScore,
+      dsRecordCount: datasetsTable.recordCount,
+      dsStatus: datasetsTable.status,
+    })
+    .from(datasetAccessTable)
+    .leftJoin(datasetsTable, eq(datasetAccessTable.datasetId, datasetsTable.id))
+    .where(eq(datasetAccessTable.clientId, id));
+
+  const accesses = rows.map((r) => ({
+    id: r.accessId,
+    datasetId: r.datasetId,
+    method: r.method,
+    tokensSpent: r.tokensSpent,
+    grantedAt: r.createdAt,
+    dataset: r.dsId != null ? {
+      id: r.dsId,
+      name: r.dsName,
+      description: r.dsDescription,
+      category: r.dsCategory,
+      qualityScore: r.dsQualityScore,
+      recordCount: r.dsRecordCount,
+      status: r.dsStatus,
+    } : null,
+  }));
+
+  res.json(accesses);
 });
 
 router.get("/clients/:id", async (req, res): Promise<void> => {

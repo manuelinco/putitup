@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Building2,
+  CheckCircle2,
   Eye,
   EyeOff,
   Lock,
@@ -46,16 +47,58 @@ const plans = [
 ];
 
 export default function Register() {
+  const [, navigate] = useLocation();
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("free");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/clients/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, company, email: email.trim().toLowerCase(), password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Registration failed");
+        return;
+      }
+      const client = data.client;
+      localStorage.setItem("pb_client_id", String(client.id));
+      localStorage.setItem("pb_client_email", client.email);
+      localStorage.setItem("pb_client_name", `${client.firstName} ${client.lastName}`);
+      localStorage.setItem("pb_client_company", client.company ?? "");
+      window.dispatchEvent(new Event("storage"));
+      setSuccess(true);
+      setTimeout(() => navigate("/dashboard"), 1500);
+    } catch {
+      setError("Connection error — please try again");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (success) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md border-border bg-card text-center p-8">
+          <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
+          <h2 className="text-xl font-bold">Account created!</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Redirecting to your dashboard…</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
@@ -76,6 +119,11 @@ export default function Register() {
           </p>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           {/* Plan selector */}
           <div className="mb-6">
             <p className="mb-3 text-sm font-medium text-foreground">Select a plan</p>
@@ -193,9 +241,16 @@ export default function Register() {
                 </button>
               </div>
             </div>
-            <Button type="submit" className="w-full" disabled>
-              {selectedPlan === "free" ? "Create Free Account" : `Start ${plans.find(p => p.id === selectedPlan)?.label} Plan`}
-              <span className="ml-2 text-xs opacity-70">(coming soon)</span>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || !name || !email || password.length < 8}
+            >
+              {loading
+                ? "Creating account…"
+                : selectedPlan === "free"
+                ? "Create Free Account"
+                : `Start ${plans.find((p) => p.id === selectedPlan)?.label} Plan`}
             </Button>
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -206,10 +261,6 @@ export default function Register() {
           </p>
         </CardContent>
       </Card>
-
-      <p className="mt-8 text-xs text-muted-foreground">
-        Registration will be activated in a future release. Stripe integration coming soon.
-      </p>
     </div>
   );
 }

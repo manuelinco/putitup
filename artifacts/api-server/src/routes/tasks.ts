@@ -190,7 +190,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
 });
 
 router.get("/tasks/review", async (req, res): Promise<void> => {
-  const stage = String(req.query.stage ?? "supervisor_review");
+  const stage = String(req.query.stage ?? "controller_review");
   const tasks = await db
     .select()
     .from(tasksTable)

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Gamepad2, LayoutDashboard, Trophy, User, Zap, Settings, Eye } from "lucide-react";
+import { Gamepad2, LayoutDashboard, Trophy, User, Zap, Settings, Eye, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth";
 
@@ -11,6 +11,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Home", icon: LayoutDashboard },
     { href: "/tasks", label: "Tasks", icon: Gamepad2 },
     { href: "/leaderboard", label: "Top", icon: Trophy },
+    { href: "/upload", label: "Upload", icon: Upload },
     { href: user ? `/profile/${user.id}` : "/profile/setup", label: "Profile", icon: User },
   ];
 
