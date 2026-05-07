@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, clientsTable, datasetsTable, datasetAccessTable } from "@workspace/db";
-import { pbkdf2Sync, randomBytes } from "crypto";
+import { pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from "crypto";
+import { verifyAdChallengeToken } from "./auth";
 
 const router: IRouter = Router();
 const TOKENS_PER_AD = 2;
@@ -18,7 +19,11 @@ function verifyPassword(password: string, stored: string): boolean {
   const [salt, hash] = stored.split(":");
   if (!salt || !hash) return false;
   const verify = pbkdf2Sync(password, salt, 10000, 64, "sha512").toString("hex");
-  return hash === verify;
+  try {
+    return timingSafeEqual(Buffer.from(verify, "hex"), Buffer.from(hash, "hex"));
+  } catch {
+    return false;
+  }
 }
 
 router.post("/clients/login", async (req, res): Promise<void> => {
@@ -52,7 +57,17 @@ router.post("/clients/set-password", async (req, res): Promise<void> => {
   const adminPass = process.env["ADMIN_PASSWORD"];
   const { adminUsername, adminPassword, email, password } = req.body ?? {};
 
-  if (adminUsername !== adminUser || adminPassword !== adminPass) {
+  let usernameOk = false;
+  let passwordOk = false;
+  try {
+    const uBuf = Buffer.from(String(adminUsername ?? ""));
+    const uRef = Buffer.from(adminUser ?? "");
+    const pBuf = Buffer.from(String(adminPassword ?? ""));
+    const pRef = Buffer.from(adminPass ?? "");
+    if (uBuf.length === uRef.length) usernameOk = timingSafeEqual(uBuf, uRef);
+    if (pBuf.length === pRef.length) passwordOk = timingSafeEqual(pBuf, pRef);
+  } catch {}
+  if (!usernameOk || !passwordOk) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -76,14 +91,21 @@ router.post("/clients/set-password", async (req, res): Promise<void> => {
   res.json({ ok: true });
 });
 
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 router.post("/clients/register", async (req, res): Promise<void> => {
   const { name, company, email, password } = req.body ?? {};
   if (!name || !email || !password) {
     res.status(400).json({ error: "name, email and password are required" });
     return;
   }
-  if (String(password).length < 8) {
-    res.status(400).json({ error: "Password must be at least 8 characters" });
+  if (!EMAIL_REGEX.test(String(email))) {
+    res.status(400).json({ error: "Invalid email format" });
+    return;
+  }
+  if (!PASSWORD_REGEX.test(String(password))) {
+    res.status(400).json({ error: "Password must be at least 8 characters with uppercase, lowercase, and a number" });
     return;
   }
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -235,7 +257,8 @@ router.post("/clients/:id/ads/watch", async (req, res): Promise<void> => {
   const adsWatchedToday = isNewDay ? 0 : client.adsWatchedToday;
   const lastAdAt = client.lastAdAt ? new Date(client.lastAdAt).getTime() : 0;
   const seconds = Number(durationSeconds ?? 0);
-  const completed = typeof completionToken === "string" && completionToken.length >= 8 && seconds >= 15;
+  const tokenValid = typeof completionToken === "string" && verifyAdChallengeToken(completionToken, id);
+  const completed = tokenValid && seconds >= 15;
   const tooFast = lastAdAt > 0 && now.getTime() - lastAdAt < AD_COOLDOWN_MS;
   const capReached = adsWatchedToday >= CLIENT_DAILY_AD_CAP;
   const suspicious = !completed || tooFast || capReached;

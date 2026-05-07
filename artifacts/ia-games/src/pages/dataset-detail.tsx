@@ -39,7 +39,7 @@ async function apiFetch(path: string, options?: RequestInit) {
 export default function DatasetDetail() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id ?? "0", 10);
-  const { data: dataset, isLoading } = useGetDataset(id, { query: { enabled: !!id } });
+  const { data: dataset, isLoading } = useGetDataset(id, { query: { enabled: !!id } as any });
   const [client, setClient] = useState<ClientAccount | null>(null);
   const [clientForm, setClientForm] = useState({ firstName: "", lastName: "", email: "", phone: "", address: "", company: "" });
   const [adsWatched, setAdsWatched] = useState(0);
@@ -101,7 +101,7 @@ export default function DatasetDetail() {
         body: JSON.stringify({ method }),
       });
       if (method === "tokens") {
-        setClient({ ...client, tokenBalance: client.tokenBalance - (dataset.tokenCost || dataset.adsRequired || 0) });
+        setClient({ ...client, tokenBalance: client.tokenBalance - ((dataset as any).tokenCost || dataset.adsRequired || 0) });
       }
       setDownloaded(true);
     } catch (err) {
@@ -138,7 +138,7 @@ export default function DatasetDetail() {
   }
 
   const adsNeeded = dataset.adsRequired ?? 3;
-  const tokenCost = dataset.tokenCost || adsNeeded;
+  const tokenCost = (dataset as any).tokenCost || adsNeeded;
   const adsProgress = Math.min(adsWatched / adsNeeded, 1) * 100;
   const canDownloadWithTokens = !!client && client.tokenBalance >= tokenCost;
 
@@ -178,7 +178,7 @@ export default function DatasetDetail() {
           <Card className="bg-card/50 border-border/50">
             <CardContent className="p-3 text-center">
               <div className="text-xs text-muted-foreground uppercase font-semibold mb-1">Records</div>
-              <div className="text-xl font-black text-primary">{(dataset.approvedRecordCount || dataset.recordCount || 0).toLocaleString()}</div>
+              <div className="text-xl font-black text-primary">{((dataset as any).approvedRecordCount || dataset.recordCount || 0).toLocaleString()}</div>
             </CardContent>
           </Card>
         </div>
@@ -190,11 +190,11 @@ export default function DatasetDetail() {
           <CardContent className="p-3 pt-0 space-y-2">
             {[
               { label: "Category", value: dataset.category },
-              { label: "Workflow", value: dataset.workflowMode ?? "consensus" },
-              { label: "Consensus", value: `${Math.round((dataset.consensusThreshold ?? 0.8) * 100)}% · ${dataset.votesRequired ?? 3} votes` },
+              { label: "Workflow", value: (dataset as any).workflowMode ?? "consensus" },
+              { label: "Consensus", value: `${Math.round(((dataset as any).consensusThreshold ?? 0.8) * 100)}% · ${(dataset as any).votesRequired ?? 3} votes` },
               { label: "Tokens", value: `${tokenCost} token` },
               { label: "Price", value: dataset.price ? `$${dataset.price.toFixed(2)}` : "N/A" },
-              { label: "Last nightly update", value: dataset.nightlyPublishedAt ? new Date(dataset.nightlyPublishedAt).toLocaleDateString() : "Pending" },
+              { label: "Last nightly update", value: (dataset as any).nightlyPublishedAt ? new Date((dataset as any).nightlyPublishedAt).toLocaleDateString() : "Pending" },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between text-sm gap-3">
                 <span className="text-muted-foreground">{label}</span>

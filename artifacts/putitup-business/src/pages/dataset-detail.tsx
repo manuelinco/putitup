@@ -168,15 +168,26 @@ export default function DatasetDetail() {
     if (!client || !adState) return;
     setWatchingAd(true);
     setAdError(null);
-    await new Promise((r) => setTimeout(r, 2000));
     try {
+      const challengeRes = await fetch("/api/auth/ads/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+      if (!challengeRes.ok) {
+        setAdError("Could not start ad session");
+        setWatchingAd(false);
+        return;
+      }
+      const { challengeToken } = await challengeRes.json();
+      await new Promise((r) => setTimeout(r, 20_000));
       const res = await fetch(`/api/clients/${client.id}/ads/watch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           datasetId: isNumericId ? numericId : id,
           durationSeconds: 20,
-          completionToken: `tok_${Math.random().toString(36).slice(2, 14)}`,
+          completionToken: challengeToken,
         }),
       });
       const data = await res.json();

@@ -166,9 +166,12 @@ router.post("/admin/datasets/:id/approve-publish", requireAdmin, async (req, res
       .groupBy(taskResponsesTable.userId);
 
     if (contributors.length > 0) {
-      const shuffled = contributors.sort(() => Math.random() - 0.5);
-      const winnerCount = Math.min(dataset.lotteryWinners, shuffled.length);
-      const winners = shuffled.slice(0, winnerCount);
+      const winnerCount = Math.min(dataset.lotteryWinners, contributors.length);
+      const indices = new Set<number>();
+      while (indices.size < winnerCount) {
+        indices.add(crypto.randomInt(0, contributors.length));
+      }
+      const winners = [...indices].map((i) => contributors[i]);
       const prizePerWinner = dataset.lotteryPool / winnerCount;
 
       for (const winner of winners) {

@@ -34,10 +34,10 @@ export default function Tasks() {
   const userId = user?.id ?? 0;
   const { impact, notification } = useTelegramHaptic();
 
-  const { data: stats, refetch: refetchStats } = useGetUserStats(userId, { query: { enabled: !!userId } });
+  const { data: stats, refetch: refetchStats } = useGetUserStats(userId, { query: { enabled: !!userId } as any });
   const { data: task, refetch: refetchTask, isLoading } = useGetNextTask(
     { userId },
-    { query: { enabled: !!userId } }
+    { query: { enabled: !!userId } as any }
   );
 
   const submitResponse = useSubmitResponse();
@@ -317,14 +317,14 @@ export default function Tasks() {
               )}
 
               {/* Image */}
-              {task.type === "image" && payload?.imageUrl && (
+              {task.type === "image" && !!payload?.imageUrl && (
                 <div className="rounded-xl overflow-hidden border border-border/40">
-                  <img src={payload.imageUrl as string} alt="Task" className="w-full h-44 object-cover" />
+                  <img src={String(payload.imageUrl)} alt="Task" className="w-full h-44 object-cover" />
                 </div>
               )}
 
               {/* Audio player for classification tasks */}
-              {payload?.audioUrl && (
+              {!!payload?.audioUrl && (
                 <div className="rounded-xl border border-accent/30 bg-accent/5 p-3 space-y-2">
                   <p className="text-[10px] uppercase font-bold text-accent tracking-wider">🎙 Audio Clip</p>
                   <audio
@@ -333,45 +333,45 @@ export default function Tasks() {
                     style={{ colorScheme: "dark" }}
                     onError={() => {}}
                   >
-                    <source src={payload.audioUrl as string} />
+                    <source src={String(payload.audioUrl)} />
                   </audio>
                 </div>
               )}
 
               {/* Question */}
               <p className="text-sm font-bold leading-snug">
-                {payload?.question as string ?? "Label this element:"}
+                {String(payload?.question ?? "Label this element:")}
               </p>
 
               {/* Text snippet for text tasks */}
-              {task.type === "text" && (payload?.content ?? payload?.text) && (
+              {task.type === "text" && !!(payload?.content ?? payload?.text) && (
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
                   <p className="text-xs text-muted-foreground italic leading-relaxed">
-                    "{(payload?.content ?? payload?.text) as string}"
+                    "{String(payload?.content ?? payload?.text)}"
                   </p>
                 </div>
               )}
 
               {/* Transcript for classification / audio tasks */}
-              {task.type === "classification" && payload?.transcript && (
+              {task.type === "classification" && !!payload?.transcript && (
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/30 space-y-1">
                   <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Transcript</p>
                   <p className="text-xs text-muted-foreground italic leading-relaxed">
-                    "{payload.transcript as string}"
+                    "{String(payload.transcript)}"
                   </p>
-                  {payload?.language && (
+                  {!!payload?.language && (
                     <span className="inline-block text-[9px] bg-muted/50 px-1.5 py-0.5 rounded font-mono">
-                      {payload.language as string}
+                      {String(payload.language)}
                     </span>
                   )}
                 </div>
               )}
 
               {/* Content/text for classification without transcript */}
-              {task.type === "classification" && !payload?.transcript && (payload?.content ?? payload?.text) && (
+              {task.type === "classification" && !payload?.transcript && !!(payload?.content ?? payload?.text) && (
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
                   <p className="text-xs text-muted-foreground italic leading-relaxed">
-                    "{(payload?.content ?? payload?.text) as string}"
+                    "{String(payload?.content ?? payload?.text)}"
                   </p>
                 </div>
               )}

@@ -131,7 +131,7 @@ router.post("/datasets/:id/generate-tasks", async (req, res): Promise<void> => {
         source: "admin_generator",
         generatedIndex: index,
       },
-      difficulty: "easy",
+      difficulty: "easy" as const,
       pointsReward: 10,
       requiredVotes: dataset.votesRequired,
       consensusThreshold: dataset.consensusThreshold,

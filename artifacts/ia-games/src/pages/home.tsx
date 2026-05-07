@@ -18,7 +18,7 @@ const levelColors: Record<string, string> = {
 export default function Home() {
   const { user } = useAuth();
   const { data: stats, isLoading: statsLoading } = useGetAnalyticsSummary();
-  const { data: activity, isLoading: activityLoading } = useGetRecentActivity({ query: { limit: 5 } });
+  const { data: activity, isLoading: activityLoading } = useGetRecentActivity({ limit: 5 });
 
   return (
     <Layout>

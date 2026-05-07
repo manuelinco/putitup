@@ -6,6 +6,8 @@ export interface BusinessClient {
   email: string;
   name: string;
   company: string;
+  tokenBalance?: number;
+  totalAdsWatched?: number;
 }
 
 function readSession(): BusinessClient | null {

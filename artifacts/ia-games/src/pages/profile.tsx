@@ -65,10 +65,10 @@ export default function Profile() {
     }
   }, [rawId, userId, authUser?.id]);
 
-  const { data: user, isLoading: userLoading } = useGetUser(userId, { query: { enabled: !!userId } });
-  const { data: stats, isLoading: statsLoading } = useGetUserStats(userId, { query: { enabled: !!userId } });
-  const { data: missions, isLoading: missionsLoading } = useGetDailyMissions(userId, { query: { enabled: !!userId } });
-  const { data: adTracking } = useGetAdTracking(userId, { query: { enabled: !!userId } });
+  const { data: user, isLoading: userLoading } = useGetUser(userId, { query: { enabled: !!userId } as any });
+  const { data: stats, isLoading: statsLoading } = useGetUserStats(userId, { query: { enabled: !!userId } as any });
+  const { data: missions, isLoading: missionsLoading } = useGetDailyMissions(userId, { query: { enabled: !!userId } as any });
+  const { data: adTracking } = useGetAdTracking(userId, { query: { enabled: !!userId } as any });
 
   const convertPoints = useConvertPoints();
   const rechargeEnergy = useRechargeEnergy();
