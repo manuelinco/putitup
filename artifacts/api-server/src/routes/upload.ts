@@ -64,11 +64,29 @@ router.post("/upload/datasets/:id/items", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = items.map((item: any) => ({
-    contributorDatasetId: contribDatasetId,
-    content: String(item.content ?? ""),
-    contentType: String(item.contentType ?? "text"),
-  }));
+  const VALID_CONTENT_TYPES = ["text", "image_url", "audio_url", "video_url"];
+  const MAX_CONTENT_LENGTH = 10_000;
+  const validatedRows: Array<{ contributorDatasetId: number; content: string; contentType: string }> = [];
+
+  for (const item of items) {
+    const ct = String(item.contentType ?? "text");
+    const content = String(item.content ?? "").slice(0, MAX_CONTENT_LENGTH);
+    if (!VALID_CONTENT_TYPES.includes(ct)) {
+      res.status(400).json({ error: `Invalid contentType: ${ct}` });
+      return;
+    }
+    if (content.trim().length === 0) {
+      res.status(400).json({ error: "Empty content is not allowed" });
+      return;
+    }
+    if ((ct === "image_url" || ct === "audio_url" || ct === "video_url") && !/^https?:\/\/.+/.test(content)) {
+      res.status(400).json({ error: `contentType ${ct} requires a valid https URL` });
+      return;
+    }
+    validatedRows.push({ contributorDatasetId: contribDatasetId, content, contentType: ct });
+  }
+
+  const rows = validatedRows;
 
   const inserted = await db.insert(contributorItemsTable).values(rows).returning();
 

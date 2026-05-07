@@ -71,6 +71,16 @@ router.post("/responses", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existingResponse] = await db
+    .select({ id: taskResponsesTable.id })
+    .from(taskResponsesTable)
+    .where(and(eq(taskResponsesTable.userId, userId), eq(taskResponsesTable.taskId, taskId)));
+
+  if (existingResponse) {
+    res.status(409).json({ error: "Task already submitted by this user" });
+    return;
+  }
+
   const [task] = await db
     .select()
     .from(tasksTable)

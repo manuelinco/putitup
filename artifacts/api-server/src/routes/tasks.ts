@@ -11,22 +11,33 @@ import {
 const router: IRouter = Router();
 
 router.get("/tasks/stats", async (_req, res): Promise<void> => {
-  const tasks = await db.select().from(tasksTable);
-  const total = tasks.length;
-  const responses = await db.select().from(taskResponsesTable);
+  const [
+    [totalRow],
+    [responseCountRow],
+    byTypeRows,
+    byDifficultyRows,
+    [goldenRow],
+  ] = await Promise.all([
+    db.select({ count: sql<number>`count(*)::int` }).from(tasksTable),
+    db.select({ count: sql<number>`count(*)::int` }).from(taskResponsesTable),
+    db.select({ type: tasksTable.type, count: sql<number>`count(*)::int` })
+      .from(tasksTable).groupBy(tasksTable.type),
+    db.select({ difficulty: tasksTable.difficulty, count: sql<number>`count(*)::int` })
+      .from(tasksTable).groupBy(tasksTable.difficulty),
+    db.select({ count: sql<number>`count(*)::int` }).from(tasksTable).where(eq(tasksTable.isGolden, true)),
+  ]);
 
-  const byType = { image: 0, text: 0, classification: 0 };
-  const byDifficulty = { easy: 0, medium: 0, hard: 0 };
-  let goldenCount = 0;
+  const total = totalRow?.count ?? 0;
+  const totalResponses = responseCountRow?.count ?? 0;
+  const goldenCount = goldenRow?.count ?? 0;
 
-  for (const t of tasks) {
-    byType[t.type]++;
-    byDifficulty[t.difficulty]++;
-    if (t.isGolden) goldenCount++;
-  }
+  const byType = { image: 0, text: 0, classification: 0 } as Record<string, number>;
+  for (const r of byTypeRows) byType[r.type] = r.count;
 
-  const completionRate =
-    total > 0 ? Math.min((responses.length / (total * 3)) * 100, 100) : 0;
+  const byDifficulty = { easy: 0, medium: 0, hard: 0 } as Record<string, number>;
+  for (const r of byDifficultyRows) byDifficulty[r.difficulty] = r.count;
+
+  const completionRate = total > 0 ? Math.min((totalResponses / (total * 3)) * 100, 100) : 0;
 
   res.json({
     total,
@@ -242,12 +253,19 @@ router.patch("/tasks/:id/supervisor-approve", async (req, res): Promise<void> =>
     return;
   }
 
+  const [supervisor] = await db.select({ id: usersTable.id, isSupervisor: usersTable.isSupervisor, isAdmin: usersTable.isAdmin })
+    .from(usersTable).where(eq(usersTable.id, supervisorId));
+  if (!supervisor || (!supervisor.isSupervisor && !supervisor.isAdmin)) {
+    res.status(403).json({ error: "Forbidden: supervisorId is not a supervisor" });
+    return;
+  }
+
   const [task] = await db.update(tasksTable).set({
     status: "pending_admin",
     reviewStage: "admin_review",
     supervisorId,
     supervisorApprovedAt: new Date(),
-  }).where(eq(tasksTable.id, id)).returning();
+  }).where(and(eq(tasksTable.id, id), eq(tasksTable.reviewStage, "controller_review"))).returning();
 
   if (!task) {
     res.status(404).json({ error: "Task not found" });
@@ -264,13 +282,20 @@ router.patch("/tasks/:id/admin-approve", async (req, res): Promise<void> => {
     return;
   }
 
+  const [admin] = await db.select({ id: usersTable.id, isAdmin: usersTable.isAdmin })
+    .from(usersTable).where(eq(usersTable.id, adminId));
+  if (!admin?.isAdmin) {
+    res.status(403).json({ error: "Forbidden: adminId is not an admin" });
+    return;
+  }
+
   const [task] = await db.update(tasksTable).set({
     status: "approved",
     reviewStage: "published",
     adminApprovedAt: new Date(),
     approvedAt: new Date(),
     rewardReleased: true,
-  }).where(eq(tasksTable.id, id)).returning();
+  }).where(and(eq(tasksTable.id, id), eq(tasksTable.rewardReleased, false))).returning();
 
   if (!task) {
     res.status(404).json({ error: "Task not found" });
@@ -306,8 +331,8 @@ router.patch("/tasks/:id/admin-approve", async (req, res): Promise<void> => {
     });
   }
 
-  const [admin] = await db.select().from(usersTable).where(eq(usersTable.id, adminId));
-  res.json({ task, rewardsReleased: correctResponses.length + (task.supervisorId ? 1 : 0), approvedBy: admin?.username ?? null });
+  const [approver] = await db.select().from(usersTable).where(eq(usersTable.id, adminId));
+  res.json({ task, rewardsReleased: correctResponses.length + (task.supervisorId ? 1 : 0), approvedBy: approver?.username ?? null });
 });
 
 router.get("/tasks/:id", async (req, res): Promise<void> => {

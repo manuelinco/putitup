@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import crypto from "crypto";
 import { eq, desc, and, gte, sql } from "drizzle-orm";
 import {
   db,
@@ -10,6 +11,7 @@ import {
   pendingPaymentsTable,
   lotteryDrawsTable,
 } from "@workspace/db";
+import { requireAdmin } from "../middleware/requireAdmin";
 
 const router: IRouter = Router();
 
@@ -23,7 +25,19 @@ router.post("/admin/claim", async (req, res): Promise<void> => {
     return;
   }
 
-  if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+  const paddedUser = username ?? "";
+  const paddedPass = password ?? "";
+  let usernameMatch = false;
+  let passwordMatch = false;
+  try {
+    const uBuf = Buffer.from(String(paddedUser));
+    const uRef = Buffer.from(ADMIN_USERNAME);
+    const pBuf = Buffer.from(String(paddedPass));
+    const pRef = Buffer.from(ADMIN_PASSWORD);
+    if (uBuf.length === uRef.length) usernameMatch = crypto.timingSafeEqual(uBuf, uRef);
+    if (pBuf.length === pRef.length) passwordMatch = crypto.timingSafeEqual(pBuf, pRef);
+  } catch {}
+  if (!usernameMatch || !passwordMatch) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
@@ -48,7 +62,7 @@ router.post("/admin/claim", async (req, res): Promise<void> => {
   res.json({ success: true, user: updated });
 });
 
-router.get("/admin/pending-payments", async (_req, res): Promise<void> => {
+router.get("/admin/pending-payments", requireAdmin, async (_req, res): Promise<void> => {
   const payments = await db
     .select({
       payment: pendingPaymentsTable,
@@ -65,7 +79,7 @@ router.get("/admin/pending-payments", async (_req, res): Promise<void> => {
   res.json(payments);
 });
 
-router.patch("/admin/pending-payments/:id/mark-paid", async (req, res): Promise<void> => {
+router.patch("/admin/pending-payments/:id/mark-paid", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const { txHash } = req.body ?? {};
   if (!Number.isFinite(id)) {
@@ -97,7 +111,7 @@ router.patch("/admin/pending-payments/:id/mark-paid", async (req, res): Promise<
   res.json(payment);
 });
 
-router.get("/admin/datasets-review", async (_req, res): Promise<void> => {
+router.get("/admin/datasets-review", requireAdmin, async (_req, res): Promise<void> => {
   const datasets = await db
     .select()
     .from(datasetsTable)
@@ -106,7 +120,7 @@ router.get("/admin/datasets-review", async (_req, res): Promise<void> => {
   res.json(datasets);
 });
 
-router.post("/admin/datasets/:id/approve-publish", async (req, res): Promise<void> => {
+router.post("/admin/datasets/:id/approve-publish", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   const adminId = Number(req.body?.adminId);
 
@@ -211,7 +225,7 @@ router.post("/admin/datasets/:id/approve-publish", async (req, res): Promise<voi
   res.json({ dataset: updated, lotteryResult, pendingPaymentsCreated: collaborators.length });
 });
 
-router.get("/admin/stats", async (_req, res): Promise<void> => {
+router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
   const [totalUsers] = await db.select({ count: sql<number>`count(*)::int` }).from(usersTable);
   const [totalTasks] = await db.select({ count: sql<number>`count(*)::int` }).from(tasksTable);
   const [totalResponses] = await db.select({ count: sql<number>`count(*)::int` }).from(taskResponsesTable);
@@ -229,7 +243,7 @@ router.get("/admin/stats", async (_req, res): Promise<void> => {
   });
 });
 
-router.post("/admin/tasks/batch", async (req, res): Promise<void> => {
+router.post("/admin/tasks/batch", requireAdmin, async (req, res): Promise<void> => {
   const { datasetId, tasks } = req.body ?? {};
   if (!Array.isArray(tasks) || tasks.length === 0) {
     res.status(400).json({ error: "tasks array is required" });
