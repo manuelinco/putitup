@@ -133,9 +133,12 @@ export default function Datasets() {
                         <div>
                           <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                             <span>Quality Score</span>
-                            <span className="font-bold text-secondary">{dataset.qualityScore}%</span>
+                            {dataset.qualityScore > 0
+                              ? <span className="font-bold text-secondary">{dataset.qualityScore}%</span>
+                              : <span className="font-bold text-yellow-500/80">In revisione</span>
+                            }
                           </div>
-                          <Progress value={dataset.qualityScore} className="h-1.5" />
+                          <Progress value={dataset.qualityScore > 0 ? dataset.qualityScore : 0} className="h-1.5" />
                         </div>
 
                         <div className="flex items-center justify-between">

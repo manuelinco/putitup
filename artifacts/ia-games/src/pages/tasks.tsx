@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useGetNextTask, useSubmitResponse, useGetUserStats, useWatchAd, getGetUserStatsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Timer, Target, Star, ChevronRight, Flame, TrendingUp, Shield } from "lucide-react";
+import { Zap, Timer, Target, Star, ChevronRight, Flame, Shield, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TASK_TIME_SECONDS = 30;
@@ -55,13 +55,38 @@ export default function Tasks() {
   const [tasksCompletedCount, setTasksCompletedCount] = useState(0);
   const [showAdChallenge, setShowAdChallenge] = useState(false);
   const [adPending, setAdPending] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const startTime = useRef<number>(Date.now());
+
+  const speakTranscript = useCallback((text: string, lang?: string) => {
+    if (!window.speechSynthesis) return;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const langMap: Record<string, string> = {
+      EN: "en-US", IT: "it-IT", FR: "fr-FR", ES: "es-ES", DE: "de-DE",
+      "en-US": "en-US", "it-IT": "it-IT", "fr-FR": "fr-FR",
+    };
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langMap[String(lang ?? "EN").toUpperCase()] ?? "en-US";
+    utterance.rate = 0.88;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }, [isSpeaking]);
 
   useEffect(() => {
     if (!task) return;
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
     setSelected(null);
     setSubmitted(false);
     setResult(null);
+    setSubmitError(null);
     setTimeLeft(TASK_TIME_SECONDS);
     setTimerActive(true);
     setShake(false);
@@ -93,7 +118,12 @@ export default function Tasks() {
   };
 
   const handleSubmit = async () => {
-    if (!selected || !task || submitted || !userId) return;
+    if (!selected || !task || submitted) return;
+    if (!userId) {
+      setSubmitError("Connetti il wallet per inviare risposte.");
+      return;
+    }
+    setSubmitError(null);
     setTimerActive(false);
     impact("medium");
     const responseTimeMs = Date.now() - startTime.current;
@@ -101,20 +131,12 @@ export default function Tasks() {
       const res = await submitResponse.mutateAsync({
         data: { userId, taskId: task.id, answer: selected, responseTimeMs },
       });
-      const correct = res.response.isCorrect ?? false;
-      setResult({ correct, points: res.pointsEarned, xp: res.xpEarned });
+      setResult({ correct: true, points: res.pointsEarned, xp: res.xpEarned });
       setSubmitted(true);
-      if (correct) {
-        notification("success");
-        setCombo((c) => c + 1);
-        setBounce(true);
-        setTimeout(() => setBounce(false), 600);
-      } else {
-        notification("error");
-        setCombo(0);
-        setShake(true);
-        setTimeout(() => setShake(false), 500);
-      }
+      notification("success");
+      setCombo((c) => c + 1);
+      setBounce(true);
+      setTimeout(() => setBounce(false), 600);
       const newCount = tasksCompletedCount + 1;
       setTasksCompletedCount(newCount);
       setTotalToday((t) => t + 1);
@@ -124,7 +146,19 @@ export default function Tasks() {
       refetchStats();
       queryClient.invalidateQueries({ queryKey: getGetUserStatsQueryKey(userId) });
       refreshUser();
-    } catch {}
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("409") || msg.includes("already")) {
+        setSubmitError("Risposta già inviata per questo task.");
+      } else if (msg.includes("energy") || msg.includes("400")) {
+        setSubmitError("Energia insufficiente — guarda un annuncio per ricaricare.");
+      } else {
+        setSubmitError("Errore nell'invio — riprova.");
+      }
+      notification("error");
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+    }
   };
 
   const handleNext = () => {
@@ -265,10 +299,8 @@ export default function Tasks() {
         ) : (
           <Card className={cn(
             "border transition-all duration-300",
-            submitted && result?.correct
-              ? "border-secondary/60 shadow-[0_0_20px_rgba(74,222,128,0.2)]"
-              : submitted && !result?.correct
-              ? "border-destructive/60 shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+            submitted
+              ? "border-accent/40 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
               : "border-primary/30 shadow-[0_0_15px_rgba(168,85,247,0.1)]",
             shake && "animate-shake",
             bounce && "animate-bounce-once"
@@ -323,18 +355,41 @@ export default function Tasks() {
                 </div>
               )}
 
-              {/* Audio player for classification tasks */}
-              {!!payload?.audioUrl && (
+              {/* Audio player — Web Speech API reads the transcript */}
+              {(!!payload?.audioUrl || !!payload?.transcript) && (
                 <div className="rounded-xl border border-accent/30 bg-accent/5 p-3 space-y-2">
-                  <p className="text-[10px] uppercase font-bold text-accent tracking-wider">🎙 Audio Clip</p>
-                  <audio
-                    controls
-                    className="w-full h-8"
-                    style={{ colorScheme: "dark" }}
-                    onError={() => {}}
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase font-bold text-accent tracking-wider">🎙 Audio Clip</p>
+                    {!!payload?.language && (
+                      <span className="text-[9px] font-mono bg-muted/50 px-1.5 py-0.5 rounded uppercase">
+                        {String(payload.language)}
+                      </span>
+                    )}
+                  </div>
+                  {!!payload?.transcript && (
+                    <p className="text-[11px] text-muted-foreground italic leading-relaxed line-clamp-2">
+                      "{String(payload.transcript)}"
+                    </p>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(
+                      "w-full h-8 text-[11px] font-bold gap-2 transition-all",
+                      isSpeaking
+                        ? "border-accent/60 text-accent bg-accent/10"
+                        : "border-accent/30 text-accent/80 hover:bg-accent/10"
+                    )}
+                    onClick={() => speakTranscript(
+                      String(payload?.transcript ?? payload?.audioUrl ?? ""),
+                      String(payload?.language ?? "EN")
+                    )}
                   >
-                    <source src={String(payload.audioUrl)} />
-                  </audio>
+                    {isSpeaking
+                      ? <><VolumeX className="w-3.5 h-3.5" /> Stop Audio</>
+                      : <><Volume2 className="w-3.5 h-3.5" /> Play Audio</>
+                    }
+                  </Button>
                 </div>
               )}
 
@@ -381,9 +436,7 @@ export default function Tasks() {
                 <div className="grid grid-cols-2 gap-2">
                   {options.map((opt) => {
                     const isSelected = selected === opt;
-                    const isCorrectAnswer = opt === (task.dataPayload as any)?.correctAnswer;
-                    const isWrongSelected = submitted && isSelected && !isCorrectAnswer;
-                    const isCorrectReveal = submitted && isCorrectAnswer && task.isGolden;
+                    const isSubmittedSelected = submitted && isSelected;
 
                     return (
                       <button
@@ -395,10 +448,8 @@ export default function Tasks() {
                           "active:scale-95",
                           isSelected && !submitted
                             ? "border-primary bg-primary/20 text-primary shadow-[0_0_12px_rgba(168,85,247,0.4)]"
-                            : isWrongSelected
-                            ? "border-destructive/80 bg-destructive/20 text-destructive"
-                            : isCorrectReveal
-                            ? "border-secondary/80 bg-secondary/20 text-secondary"
+                            : isSubmittedSelected
+                            ? "border-accent/60 bg-accent/10 text-accent"
                             : submitted
                             ? "border-border/30 bg-muted/20 text-muted-foreground"
                             : "border-border/40 bg-card/40 hover:border-primary/50 hover:bg-primary/5 hover:shadow-[0_0_8px_rgba(168,85,247,0.2)]"
@@ -414,19 +465,24 @@ export default function Tasks() {
                 </div>
               )}
 
-              {/* Result feedback */}
+              {/* Neutral result feedback — no correct/wrong reveal */}
               {submitted && result && (
-                <div className={cn(
-                  "text-center py-3 rounded-xl font-black text-sm",
-                  result.correct
-                    ? "bg-secondary/20 text-secondary border border-secondary/30"
-                    : "bg-destructive/20 text-destructive border border-destructive/30"
-                )}>
-                  {result.correct
-                    ? `✓ Correct! +${result.points} pts · +${result.xp} XP · +${TON_PER_TASK} TON${combo > 1 ? ` 🔥 Combo x${comboMultiplier}!` : ""}`
-                    : timeLeft <= 0
-                    ? "⏱ Time's up!"
-                    : "✗ Wrong answer — try again!"}
+                <div className="text-center py-3 rounded-xl bg-accent/10 border border-accent/20 space-y-0.5">
+                  <p className="font-black text-sm text-accent">✓ Risposta registrata</p>
+                  <p className="text-[11px] text-muted-foreground">In attesa di revisione</p>
+                  {result.points > 0 && (
+                    <p className="text-[11px] font-black text-secondary mt-1">
+                      +{result.points} pts · +{result.xp} XP · +{TON_PER_TASK} TON
+                      {combo > 1 ? ` 🔥 Combo x${comboMultiplier}!` : ""}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Submit error message */}
+              {submitError && (
+                <div className="text-center py-2 px-3 rounded-xl bg-destructive/10 border border-destructive/30">
+                  <p className="text-xs font-bold text-destructive">{submitError}</p>
                 </div>
               )}
 

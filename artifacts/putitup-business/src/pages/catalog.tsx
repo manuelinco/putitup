@@ -223,7 +223,7 @@ export default function Catalog() {
                       </Badge>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                        {d.accuracy}%
+                        In revisione
                       </div>
                     </div>
                     <h3 className="mb-1 font-semibold leading-snug text-foreground">

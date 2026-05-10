@@ -245,7 +245,8 @@ export default function DatasetDetail() {
   const name = isNumericId ? (liveDataset?.name ?? `Dataset #${numericId}`) : (staticDataset?.name ?? "");
   const description = isNumericId ? (liveDataset?.description ?? "") : (staticDataset?.description ?? "");
   const category = isNumericId ? (liveDataset?.category ?? "") : (staticDataset?.category ?? "");
-  const accuracy = isNumericId ? (liveDataset?.qualityScore ?? 99) : (staticDataset?.accuracy ?? 99);
+  const rawQuality = isNumericId ? (liveDataset?.qualityScore ?? 0) : (staticDataset?.accuracy ?? 0);
+  const accuracyLabel = rawQuality > 0 ? `${Number(rawQuality).toFixed(1)}%` : "In revisione";
   const samples = isNumericId ? (liveDataset?.recordCount?.toLocaleString() ?? "—") : (staticDataset?.samples ?? "—");
   const tags = isNumericId ? [category.toLowerCase()] : (staticDataset?.tags ?? []);
   const formats = isNumericId ? ["CSV", "JSON"] : (staticDataset?.formats ?? ["CSV"]);
@@ -447,7 +448,7 @@ export default function DatasetDetail() {
                 <CardContent className="p-5 space-y-4">
                   {[
                     { icon: Database, label: "Samples", value: samples },
-                    { icon: Star, label: "Accuracy", value: `${Number(accuracy).toFixed(1)}%` },
+                    { icon: Star, label: "Accuracy", value: accuracyLabel },
                     { icon: Users, label: "Contributors", value: isNumericId ? "Crowd" : (staticDataset?.contributors ?? "—") },
                     { icon: Globe, label: "Languages", value: isNumericId ? "Multi" : (staticDataset?.languages?.join(", ") ?? "EN") },
                     { icon: FileText, label: "Formats", value: formats.join(", ") },

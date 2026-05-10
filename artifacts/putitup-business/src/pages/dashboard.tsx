@@ -150,7 +150,7 @@ export default function Dashboard() {
                                 </Badge>
                                 {entry.dataset?.qualityScore != null && (
                                   <Badge variant="outline" className="text-[10px] text-secondary border-secondary/40">
-                                    {entry.dataset.qualityScore.toFixed(1)}% quality
+                                    {entry.dataset.qualityScore > 0 ? `${entry.dataset.qualityScore.toFixed(1)}% quality` : "In revisione"}
                                   </Badge>
                                 )}
                               </div>
