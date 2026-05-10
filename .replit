@@ -70,3 +70,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 MINI_APP_URL = "https://f3aedc66-170e-4732-9471-a75aaa7f9d9f-00-3oe97kn7j303s.spock.replit.dev/"
+
+[userenv.production]
+ALLOWED_ORIGINS = "https://f3aedc66-170e-4732-9471-a75aaa7f9d9f-00-3oe97kn7j303s.spock.replit.dev,https://web.telegram.org"
