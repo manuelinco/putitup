@@ -245,7 +245,7 @@ export default function DatasetDetail() {
   const name = isNumericId ? (liveDataset?.name ?? `Dataset #${numericId}`) : (staticDataset?.name ?? "");
   const description = isNumericId ? (liveDataset?.description ?? "") : (staticDataset?.description ?? "");
   const category = isNumericId ? (liveDataset?.category ?? "") : (staticDataset?.category ?? "");
-  const rawQuality = isNumericId ? (liveDataset?.qualityScore ?? 0) : (staticDataset?.accuracy ?? 0);
+  const rawQuality = isNumericId ? (liveDataset?.qualityScore ?? 0) : 0;
   const accuracyLabel = rawQuality > 0 ? `${Number(rawQuality).toFixed(1)}%` : "In revisione";
   const samples = isNumericId ? (liveDataset?.recordCount?.toLocaleString() ?? "—") : (staticDataset?.samples ?? "—");
   const tags = isNumericId ? [category.toLowerCase()] : (staticDataset?.tags ?? []);
