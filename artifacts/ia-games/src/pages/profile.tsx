@@ -20,8 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins, Gift, Copy, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { API_BASE } from "@/lib/api";
 
 interface RewardEntry {
   id: number;

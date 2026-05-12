@@ -21,6 +21,7 @@ import {
   Loader2,
   Eye,
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 const datasets: Record<string, {
   name: string;
@@ -130,7 +131,7 @@ export default function DatasetDetail() {
 
   useEffect(() => {
     if (!isNumericId) return;
-    fetch(`/api/datasets/${numericId}`)
+    fetch(`${API_BASE}/api/datasets/${numericId}`)
       .then((r) => r.json())
       .then((data) => { if (data && data.id) setLiveDataset(data); })
       .catch(() => {});
@@ -138,7 +139,7 @@ export default function DatasetDetail() {
 
   useEffect(() => {
     if (!client || !isNumericId) return;
-    fetch(`/api/clients/${client.id}/datasets`)
+    fetch(`${API_BASE}/api/clients/${client.id}/datasets`)
       .then((r) => r.json())
       .then((data: any[]) => {
         if (Array.isArray(data)) {
@@ -169,7 +170,7 @@ export default function DatasetDetail() {
     setWatchingAd(true);
     setAdError(null);
     try {
-      const challengeRes = await fetch("/api/auth/ads/challenge", {
+      const challengeRes = await fetch(`${API_BASE}/api/auth/ads/challenge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clientId: client.id }),
@@ -181,7 +182,7 @@ export default function DatasetDetail() {
       }
       const { challengeToken } = await challengeRes.json();
       await new Promise((r) => setTimeout(r, 20_000));
-      const res = await fetch(`/api/clients/${client.id}/ads/watch`, {
+      const res = await fetch(`${API_BASE}/api/clients/${client.id}/ads/watch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -214,7 +215,7 @@ export default function DatasetDetail() {
     if (!client || !isNumericId) return;
     setUnlocking(true);
     try {
-      await fetch(`/api/clients/${client.id}/datasets/${numericId}/unlock`, {
+      await fetch(`${API_BASE}/api/clients/${client.id}/datasets/${numericId}/unlock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ method: "ads" }),

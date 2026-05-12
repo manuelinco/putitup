@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useTonConnectUI, useTonWallet } from "@tonconnect/ui-react";
+import { API_BASE } from "@/lib/api";
 
 export interface AuthUser {
   id: number;
@@ -35,8 +36,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {

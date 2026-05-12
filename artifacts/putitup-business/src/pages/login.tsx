@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Eye, EyeOff, Lock, Mail, Zap } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -20,7 +21,7 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(`/api/clients/login`, {
+      const res = await fetch(`${API_BASE}/api/clients/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),

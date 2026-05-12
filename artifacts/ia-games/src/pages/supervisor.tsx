@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle, Eye, Shield, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { API_BASE } from "@/lib/api";
 
 async function apiFetch(path: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {

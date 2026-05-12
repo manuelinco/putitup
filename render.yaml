@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: putitup-api
+    env: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://putitupbusiness.it,https://www.putitupbusiness.it,https://tg.putitupbusiness.it

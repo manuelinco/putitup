@@ -9,8 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Star, Play, Lock, Database, ChevronLeft, CheckCircle, Shield, UserPlus, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { API_BASE } from "@/lib/api";
 
 interface ClientAccount {
   id: number;

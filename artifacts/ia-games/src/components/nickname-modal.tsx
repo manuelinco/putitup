@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Zap, CheckCircle, XCircle, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { API_BASE } from "@/lib/api";
 
 export function NicknameModal() {
   const { completeRegistration, pendingWallet, pendingTelegramId } = useAuth();

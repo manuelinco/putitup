@@ -16,6 +16,7 @@ import {
   User,
   Zap,
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 const plans = [
   {
@@ -63,7 +64,7 @@ export default function Register() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/clients/register", {
+      const res = await fetch(`${API_BASE}/api/clients/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, company, email: email.trim().toLowerCase(), password }),

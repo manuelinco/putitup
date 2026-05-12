@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface UnlockedDataset {
   id: number;
@@ -49,7 +50,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!client) { navigate("/login"); return; }
-    fetch(`/api/clients/${client.id}/datasets`)
+    fetch(`${API_BASE}/api/clients/${client.id}/datasets`)
       .then((r) => r.json())
       .then((data) => setUnlocked(Array.isArray(data) ? data : []))
       .catch(() => setUnlocked([]))

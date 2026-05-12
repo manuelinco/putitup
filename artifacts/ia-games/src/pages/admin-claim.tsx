@@ -3,8 +3,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Shield, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
-
-const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { API_BASE } from "@/lib/api";
 
 export default function AdminClaim() {
   const [, navigate] = useLocation();

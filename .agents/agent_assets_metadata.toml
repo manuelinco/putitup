@@ -6,3 +6,9 @@ id = "9N6CWvSTUcsFlJoEhw9H6"
 uri = "file://exports/PUTITUP_Ecosistema.md"
 type = "text"
 title = "PUTITUP — Ecosistema Completo"
+
+[[outputs]]
+id = "GvfZ-kdzZKrxDyFfXqiZg"
+uri = "file://exports/PUTITUP_Deploy_Guide.md"
+type = "text"
+title = "Guida Deploy — putitupbusiness.it"
