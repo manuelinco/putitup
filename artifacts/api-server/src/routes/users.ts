@@ -65,14 +65,22 @@ router.post("/users", async (req, res): Promise<void> => {
   const base = String(username).replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 4).padEnd(4, "X");
   const referralCode = `${base}${Math.floor(Math.random() * 9000 + 1000)}`;
 
-  const [user] = await db.insert(usersTable).values({
-    username: String(username),
-    telegramId: telegramId ? String(telegramId) : null,
-    walletAddress: walletAddress ? String(walletAddress) : null,
-    avatarUrl: avatarUrl ? String(avatarUrl) : null,
-    referralCode,
-  }).returning();
-  res.status(201).json(user);
+  try {
+    const [user] = await db.insert(usersTable).values({
+      username: String(username),
+      telegramId: telegramId ? String(telegramId) : null,
+      walletAddress: walletAddress ? String(walletAddress) : null,
+      avatarUrl: avatarUrl ? String(avatarUrl) : null,
+      referralCode,
+    }).returning();
+    res.status(201).json(user);
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      res.status(409).json({ error: "Username already taken" });
+      return;
+    }
+    throw err;
+  }
 });
 
 router.get("/users/check-username/:username", async (req, res): Promise<void> => {
