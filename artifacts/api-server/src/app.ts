@@ -10,11 +10,6 @@ const app: Express = express();
 
 app.set("trust proxy", 1);
 
-const ALLOWED_ORIGINS = process.env.NODE_ENV === "production"
-  ? (process.env.ALLOWED_ORIGINS ?? "https://putitupbusiness.it,https://www.putitupbusiness.it,https://tg.putitupbusiness.it")
-      .split(",").filter(Boolean)
-  : true;
-
 const isProduction = process.env.NODE_ENV === "production";
 
 app.use(helmet({
@@ -34,10 +29,10 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: ALLOWED_ORIGINS,
+  origin: "*",
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
+  credentials: false,
 }));
 
 const globalLimiter = rateLimit({
