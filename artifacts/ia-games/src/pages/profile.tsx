@@ -54,7 +54,7 @@ export default function Profile() {
   const rawId = params.id ?? "0";
   const userId = parseInt(rawId, 10);
   const queryClient = useQueryClient();
-  const { user: authUser, logout, source, wallet, refreshUser } = useAuth();
+  const { user: authUser, logout, source, wallet, connectWallet, refreshUser } = useAuth();
   const isOwnProfile = authUser?.id === userId;
 
   // Redirect "setup" (unauthenticated placeholder) to real profile once logged in
@@ -257,6 +257,68 @@ export default function Profile() {
               </Button>
             </CardContent>
           </Card>
+        )}
+
+        {/* TON Wallet card */}
+        {isOwnProfile && (
+          <div style={{
+            background: wallet
+              ? "linear-gradient(135deg, rgba(0,136,204,0.12), rgba(0,95,163,0.08))"
+              : "linear-gradient(135deg, rgba(124,58,237,0.10), rgba(109,40,217,0.06))",
+            border: wallet ? "1px solid rgba(0,136,204,0.35)" : "1px solid rgba(124,58,237,0.30)",
+            borderRadius: 14,
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}>
+            {/* TON diamond icon */}
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+              background: wallet ? "linear-gradient(135deg, #0088cc, #005fa3)" : "rgba(124,58,237,0.20)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20, color: wallet ? "#fff" : "#a78bfa",
+            }}>
+              ◆
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {wallet ? (
+                <>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#4fc3f7" }}>
+                    TON Wallet collegato
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: 10, color: "#666", fontFamily: "monospace" }}>
+                    {wallet.account.address.slice(0, 10)}…{wallet.account.address.slice(-8)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#a78bfa" }}>
+                    Collega TON Wallet
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: 10, color: "#666" }}>
+                    Ricevi 0,00004 TON per ogni task
+                  </p>
+                </>
+              )}
+            </div>
+
+            {!wallet && (
+              <button
+                onClick={connectWallet}
+                style={{
+                  flexShrink: 0,
+                  background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
+                  color: "#fff", border: "none", borderRadius: 10,
+                  padding: "8px 14px", fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                Connetti
+              </button>
+            )}
+          </div>
         )}
 
         {/* Referral Section */}
