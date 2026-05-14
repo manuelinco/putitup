@@ -39,7 +39,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function apiFetch(path: string, options?: RequestInit) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       headers: { "Content-Type": "application/json" },

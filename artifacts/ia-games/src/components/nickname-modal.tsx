@@ -2,10 +2,20 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Zap, CheckCircle, XCircle, Loader2, User } from "lucide-react";
+import { Zap, CheckCircle, XCircle, Loader2, User, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { API_BASE } from "@/lib/api";
+
+async function fetchWithTimeout(url: string, ms = 20000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export function NicknameModal() {
   const { completeRegistration, pendingWallet, pendingTelegramId } = useAuth();
@@ -13,6 +23,7 @@ export function NicknameModal() {
   const [status, setStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     if (username.length < 3) {
@@ -22,7 +33,7 @@ export function NicknameModal() {
     const t = setTimeout(async () => {
       setStatus("checking");
       try {
-        const res = await fetch(`${API_BASE}/api/users/check-username/${encodeURIComponent(username)}`);
+        const res = await fetchWithTimeout(`${API_BASE}/api/users/check-username/${encodeURIComponent(username)}`);
         const data = await res.json();
         if (data.available) {
           setStatus("available");
@@ -40,9 +51,16 @@ export function NicknameModal() {
   const handleSubmit = async () => {
     if (status !== "available" || submitting) return;
     setSubmitting(true);
+    setSubmitError("");
     try {
       await completeRegistration(username);
-    } catch {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Registrazione fallita";
+      setSubmitError(
+        msg.includes("abort") || msg.includes("timeout")
+          ? "L'API è in avvio, riprova tra 10 secondi."
+          : msg
+      );
       setSubmitting(false);
     }
   };
@@ -75,7 +93,7 @@ export function NicknameModal() {
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20))}
+                onChange={(e) => { setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20)); setSubmitError(""); }}
                 placeholder="e.g. DataHunter99"
                 className={cn(
                   "w-full px-4 py-3 rounded-xl bg-muted/40 border text-sm font-semibold placeholder:text-muted-foreground focus:outline-none transition-all pr-10",
@@ -94,7 +112,7 @@ export function NicknameModal() {
             </div>
 
             {/* Feedback */}
-            <div className="h-4">
+            <div className="min-h-4">
               {status === "available" && (
                 <p className="text-[11px] text-secondary font-semibold">✓ Available!</p>
               )}
@@ -110,6 +128,14 @@ export function NicknameModal() {
               Letters, numbers and underscores only. 3–20 characters.
             </p>
           </div>
+
+          {/* Submit error */}
+          {submitError && (
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+              <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-destructive">{submitError}</p>
+            </div>
+          )}
 
           {/* Submit */}
           <Button
