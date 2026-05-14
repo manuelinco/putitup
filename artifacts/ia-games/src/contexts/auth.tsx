@@ -164,7 +164,20 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       const addr = wallet.account.address;
       // If we already have a session with this wallet, skip
       if (user?.walletAddress === addr) return;
-      // Look up by wallet
+
+      // If already logged in (Telegram user), just link the wallet to their account
+      if (user) {
+        apiFetch(`/api/users/${user.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ walletAddress: addr }),
+        }).then((updated) => {
+          if (updated) setUser(updated as AuthUser);
+        }).catch(() => {});
+        return;
+      }
+
+      // Look up by wallet (new user or wallet-first login)
       apiFetch(`/api/users/by-wallet/${addr}`).then((u) => {
         if (u) {
           setUser(u as AuthUser);
