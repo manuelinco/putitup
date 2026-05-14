@@ -66,11 +66,7 @@ router.post("/responses", async (req, res): Promise<void> => {
     return;
   }
 
-  if (user.energy < MIN_ENERGY_PER_TASK) {
-    res.status(400).json({ error: "Not enough energy" });
-    return;
-  }
-
+  // Check duplicate BEFORE energy — avoids misleading "not enough energy" on re-submit
   const [existingResponse] = await db
     .select({ id: taskResponsesTable.id })
     .from(taskResponsesTable)
@@ -78,6 +74,11 @@ router.post("/responses", async (req, res): Promise<void> => {
 
   if (existingResponse) {
     res.status(409).json({ error: "Task already submitted by this user" });
+    return;
+  }
+
+  if (user.energy < MIN_ENERGY_PER_TASK) {
+    res.status(400).json({ error: "Not enough energy" });
     return;
   }
 
