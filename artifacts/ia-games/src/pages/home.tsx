@@ -71,7 +71,7 @@ export default function Home() {
             <CardContent className="p-3 flex items-center gap-3">
               <Users className="h-5 w-5 text-secondary flex-shrink-0" />
               <div>
-                {statsLoading ? <Skeleton className="h-5 w-12" /> : <p className="text-lg font-black">{stats?.totalUsers.toLocaleString()}</p>}
+                {statsLoading ? <Skeleton className="h-5 w-12" /> : <p className="text-lg font-black">{stats?.totalUsers?.toLocaleString() ?? '—'}</p>}
                 <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Contributors</p>
               </div>
             </CardContent>
@@ -80,7 +80,7 @@ export default function Home() {
             <CardContent className="p-3 flex items-center gap-3">
               <Zap className="h-5 w-5 text-primary flex-shrink-0" />
               <div>
-                {statsLoading ? <Skeleton className="h-5 w-12" /> : <p className="text-lg font-black">{stats?.tasksCompletedToday.toLocaleString()}</p>}
+                {statsLoading ? <Skeleton className="h-5 w-12" /> : <p className="text-lg font-black">{stats?.tasksCompletedToday?.toLocaleString() ?? '—'}</p>}
                 <p className="text-[10px] uppercase text-muted-foreground font-semibold tracking-wider">Today</p>
               </div>
             </CardContent>
