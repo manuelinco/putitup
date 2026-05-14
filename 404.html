@@ -9,10 +9,52 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script type="module" crossorigin src="/assets/index-DUyf0GmW.js"></script>
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        background: #0d0d1a;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        font-family: 'Inter', system-ui, sans-serif;
+      }
+      #splash-logo {
+        font-size: 32px;
+        font-weight: 900;
+        letter-spacing: -1px;
+        color: #fff;
+        margin-bottom: 8px;
+      }
+      #splash-logo span { color: #a855f7; }
+      #splash-sub {
+        font-size: 11px;
+        color: #666;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-bottom: 40px;
+      }
+      #splash-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #2d1b69;
+        border-top-color: #a855f7;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script type="module" crossorigin src="/assets/index-C-J-awpB.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-yrwDeHqN.css">
   </head>
   <body>
+    <div id="splash">
+      <div id="splash-logo">PUTIT<span>UP</span></div>
+      <div id="splash-sub">AI Data Platform</div>
+      <div id="splash-spinner"></div>
+    </div>
     <div id="root"></div>
   </body>
 </html>
