@@ -24,12 +24,14 @@ interface AuthContextValue {
   user: AuthUser | null;
   source: AuthSource;
   isLoading: boolean;
+  needsWalletConnect: boolean;
   needsNickname: boolean;
   pendingWallet: string | null;
   pendingTelegramId: string | null;
   wallet: ReturnType<typeof useTonWallet>;
   connectWallet: () => void;
   disconnectWallet: () => void;
+  skipWalletConnect: () => void;
   completeRegistration: (username: string) => Promise<void>;
   cancelRegistration: () => void;
   refreshUser: () => Promise<void>;
@@ -92,6 +94,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [source, setSource] = useState<AuthSource>("none");
   const [isLoading, setIsLoading] = useState(true);
+  const [needsWalletConnect, setNeedsWalletConnect] = useState(false);
   const [needsNickname, setNeedsNickname] = useState(false);
   const [pendingWallet, setPendingWallet] = useState<string | null>(null);
   const [pendingTelegramId, setPendingTelegramId] = useState<string | null>(null);
@@ -140,9 +143,9 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
             return;
           }
         } catch {}
-        // New Telegram user (or API error) — show nickname immediately, no wallet needed
+        // New Telegram user — show wallet connect first, then nickname
         setPendingTelegramId(tgUser.id);
-        setNeedsNickname(true);
+        setNeedsWalletConnect(true);
         setInitialized(true);
         setIsLoading(false);
         return;
@@ -168,13 +171,17 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
           setSource("wallet");
           saveSession((u as AuthUser).id, "wallet");
           setNeedsNickname(false);
+          setNeedsWalletConnect(false);
           setPendingWallet(null);
         } else {
+          // Wallet connected but no account yet — proceed to nickname step
           setPendingWallet(addr);
+          setNeedsWalletConnect(false);
           setNeedsNickname(true);
         }
       }).catch(() => {
         setPendingWallet(addr);
+        setNeedsWalletConnect(false);
         setNeedsNickname(true);
       });
     } else {
@@ -184,6 +191,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setSource("none");
         setNeedsNickname(false);
+        setNeedsWalletConnect(false);
         setPendingWallet(null);
       }
     }
@@ -217,6 +225,11 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     setPendingTelegramId(null);
   }, [pendingWallet, pendingTelegramId]);
 
+  const skipWalletConnect = useCallback(() => {
+    setNeedsWalletConnect(false);
+    setNeedsNickname(true);
+  }, []);
+
   const cancelRegistration = useCallback(() => {
     setNeedsNickname(false);
     setPendingWallet(null);
@@ -234,9 +247,9 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, source, isLoading, needsNickname,
+      user, source, isLoading, needsWalletConnect, needsNickname,
       pendingWallet, pendingTelegramId, wallet,
-      connectWallet, disconnectWallet,
+      connectWallet, disconnectWallet, skipWalletConnect,
       completeRegistration, cancelRegistration, refreshUser, logout,
     }}>
       {children}
