@@ -38,13 +38,20 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok && res.status !== 404) throw new Error(`API error ${res.status}`);
-  if (res.status === 404) return null;
-  return res.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      ...options,
+    });
+    if (!res.ok && res.status !== 404) throw new Error(`API error ${res.status}`);
+    if (res.status === 404) return null;
+    return res.json();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function getTelegramUser(): { id: string; username?: string } | null {
@@ -120,22 +127,24 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       // 2. Telegram Mini App
       const tgUser = getTelegramUser();
       if (tgUser) {
-        const u = await apiFetch(`/api/users/by-telegram/${tgUser.id}`);
-        if (u) {
-          if (!(u as AuthUser).walletAddress) {
-            setPendingTelegramId(tgUser.id);
+        try {
+          const u = await apiFetch(`/api/users/by-telegram/${tgUser.id}`);
+          if (u) {
+            if (!(u as AuthUser).walletAddress) {
+              setPendingTelegramId(tgUser.id);
+              setInitialized(true);
+              setIsLoading(false);
+              return;
+            }
+            setUser(u as AuthUser);
+            setSource("telegram");
+            saveSession(u.id, "telegram");
             setInitialized(true);
             setIsLoading(false);
             return;
           }
-          setUser(u as AuthUser);
-          setSource("telegram");
-          saveSession(u.id, "telegram");
-          setInitialized(true);
-          setIsLoading(false);
-          return;
-        }
-        // New Telegram user
+        } catch {}
+        // New Telegram user or API error
         setPendingTelegramId(tgUser.id);
         setNeedsNickname(false);
         setInitialized(true);
@@ -146,7 +155,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       setInitialized(true);
       setIsLoading(false);
     };
-    init();
+    init().catch(() => { setInitialized(true); setIsLoading(false); });
   }, []);
 
   // React to wallet connection changes
