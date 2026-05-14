@@ -177,6 +177,9 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
           setPendingWallet(addr);
           setNeedsNickname(true);
         }
+      }).catch(() => {
+        setPendingWallet(addr);
+        setNeedsNickname(true);
       });
     } else {
       // Wallet disconnected

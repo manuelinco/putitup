@@ -16,6 +16,36 @@ import Admin from "@/pages/admin";
 import AdminClaim from "@/pages/admin-claim";
 import Controller from "@/pages/supervisor";
 import UploadPage from "@/pages/upload";
+import { Component, type ReactNode, type ErrorInfo } from "react";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(_error: Error, _info: ErrorInfo) {}
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: "100dvh", background: "#0a0a0f", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ textAlign: "center", color: "#fff", maxWidth: "320px" }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚡</div>
+            <h2 style={{ fontWeight: 900, fontSize: "20px", marginBottom: "8px" }}>PUTITUP</h2>
+            <p style={{ color: "#888", fontSize: "13px", marginBottom: "16px" }}>Errore di avvio. Riapri la mini app.</p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ background: "#6d28d9", color: "#fff", border: "none", borderRadius: "8px", padding: "10px 24px", fontWeight: 700, cursor: "pointer" }}
+            >
+              Riprova
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -84,15 +114,19 @@ const TON_MANIFEST_URL = `${window.location.origin}${import.meta.env.BASE_URL}to
 
 function App() {
   return (
-    <TonConnectUIProvider manifestUrl={TON_MANIFEST_URL}>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <AuthProvider>
-            <AppInner />
-          </AuthProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </TonConnectUIProvider>
+    <ErrorBoundary>
+      <TonConnectUIProvider manifestUrl={TON_MANIFEST_URL}>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <AuthProvider>
+              <ErrorBoundary>
+                <AppInner />
+              </ErrorBoundary>
+            </AuthProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </TonConnectUIProvider>
+    </ErrorBoundary>
   );
 }
 
