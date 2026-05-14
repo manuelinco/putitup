@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Zap, CheckCircle, XCircle, Loader2, User, AlertCircle } from "lucide-react";
+import { Zap, CheckCircle, XCircle, Loader2, User, AlertCircle, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
-
 import { API_BASE } from "@/lib/api";
 
 async function fetchWithTimeout(url: string, ms = 20000): Promise<Response> {
@@ -18,7 +17,7 @@ async function fetchWithTimeout(url: string, ms = 20000): Promise<Response> {
 }
 
 export function NicknameModal() {
-  const { completeRegistration, pendingWallet, pendingTelegramId } = useAuth();
+  const { completeRegistration, cancelRegistration, connectWallet, pendingWallet, pendingTelegramId } = useAuth();
   const [username, setUsername] = useState("");
   const [status, setStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [reason, setReason] = useState("");
@@ -57,44 +56,49 @@ export function NicknameModal() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Registrazione fallita";
       setSubmitError(
-        msg.includes("abort") || msg.includes("timeout")
-          ? "L'API è in avvio, riprova tra 10 secondi."
+        msg.includes("abort") || msg.toLowerCase().includes("timeout") || msg.includes("signal")
+          ? "Server in avvio, riprova tra 10 secondi."
           : msg
       );
       setSubmitting(false);
     }
   };
 
-  const displaySource = pendingTelegramId ? "Telegram" : pendingWallet
-    ? `${pendingWallet.slice(0, 6)}...${pendingWallet.slice(-4)}`
-    : "";
+  const isTelegramOnly = !!pendingTelegramId && !pendingWallet;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md p-4">
       <Card className="w-full max-w-sm border-primary/40 bg-card shadow-[0_0_60px_rgba(168,85,247,0.2)]">
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="p-6 space-y-5">
           {/* Icon */}
-          <div className="text-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(168,85,247,0.3)]">
-              <User className="w-8 h-8 text-primary" />
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+              <User className="w-7 h-7 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-black tracking-tight">Choose your username</h2>
+              <h2 className="text-xl font-black tracking-tight">Scegli il tuo username</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                {displaySource && <span className="text-primary font-semibold">{displaySource}</span>}
-                {" "}connected! Pick a unique name to start earning.
+                {pendingWallet
+                  ? <><span className="text-primary font-semibold">{pendingWallet.slice(0, 8)}…{pendingWallet.slice(-4)}</span> connesso!</>
+                  : pendingTelegramId
+                    ? <><span className="text-primary font-semibold">Telegram</span> verificato!</>
+                    : "Connetti un'identità per procedere."
+                }{" "}Scegli un nome unico per iniziare a guadagnare.
               </p>
             </div>
           </div>
 
-          {/* Input */}
+          {/* Username input */}
           <div className="space-y-2">
             <div className="relative">
               <input
                 type="text"
                 value={username}
-                onChange={(e) => { setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20)); setSubmitError(""); }}
-                placeholder="e.g. DataHunter99"
+                onChange={(e) => {
+                  setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20));
+                  setSubmitError("");
+                }}
+                placeholder="es. DataHunter99"
                 className={cn(
                   "w-full px-4 py-3 rounded-xl bg-muted/40 border text-sm font-semibold placeholder:text-muted-foreground focus:outline-none transition-all pr-10",
                   status === "available" ? "border-secondary/60 focus:border-secondary" :
@@ -111,23 +115,25 @@ export function NicknameModal() {
               </div>
             </div>
 
-            {/* Feedback */}
             <div className="min-h-4">
-              {status === "available" && (
-                <p className="text-[11px] text-secondary font-semibold">✓ Available!</p>
-              )}
-              {(status === "taken" || status === "invalid") && (
-                <p className="text-[11px] text-destructive">{reason || "Username not available"}</p>
-              )}
-              {status === "idle" && username.length > 0 && username.length < 3 && (
-                <p className="text-[11px] text-muted-foreground">Minimum 3 characters</p>
-              )}
+              {status === "available" && <p className="text-[11px] text-secondary font-semibold">✓ Disponibile!</p>}
+              {(status === "taken" || status === "invalid") && <p className="text-[11px] text-destructive">{reason || "Username non disponibile"}</p>}
+              {status === "idle" && username.length > 0 && username.length < 3 && <p className="text-[11px] text-muted-foreground">Minimo 3 caratteri</p>}
             </div>
-
-            <p className="text-[10px] text-muted-foreground">
-              Letters, numbers and underscores only. 3–20 characters.
-            </p>
+            <p className="text-[10px] text-muted-foreground">Lettere, numeri e underscore. 3–20 caratteri.</p>
           </div>
+
+          {/* Optional TON wallet (for Telegram users) */}
+          {isTelegramOnly && (
+            <button
+              type="button"
+              onClick={connectWallet}
+              className="w-full flex items-center gap-2 justify-center rounded-xl border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 py-2.5 px-4 text-xs font-semibold text-primary/80 transition-all"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              Collega TON Wallet (opzionale)
+            </button>
+          )}
 
           {/* Submit error */}
           {submitError && (
@@ -137,18 +143,29 @@ export function NicknameModal() {
             </div>
           )}
 
-          {/* Submit */}
-          <Button
-            className="w-full font-bold text-base h-12 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-            disabled={status !== "available" || submitting}
-            onClick={handleSubmit}
-          >
-            {submitting ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating account...</>
-            ) : (
-              <><Zap className="w-4 h-4 mr-2" /> Start earning</>
+          {/* Buttons */}
+          <div className="space-y-2">
+            <Button
+              className="w-full font-bold text-base h-12 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+              disabled={status !== "available" || submitting}
+              onClick={handleSubmit}
+            >
+              {submitting
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creazione account...</>
+                : <><Zap className="w-4 h-4 mr-2" /> Inizia a guadagnare</>
+              }
+            </Button>
+
+            {!pendingTelegramId && (
+              <button
+                type="button"
+                onClick={cancelRegistration}
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground transition-colors py-1"
+              >
+                Annulla
+              </button>
             )}
-          </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
