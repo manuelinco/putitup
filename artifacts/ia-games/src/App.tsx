@@ -73,7 +73,7 @@ function Router() {
 }
 
 function AppInner() {
-  const { user, isLoading, needsNickname } = useAuth();
+  const { user, isLoading, needsWalletConnect, needsNickname } = useAuth();
 
   useTelegramInit();
 
@@ -93,6 +93,10 @@ function AppInner() {
         <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
       </div>
     );
+  }
+
+  if (needsWalletConnect) {
+    return <LoginScreen telegramOnboarding />;
   }
 
   if (!user && !needsNickname && protectedPath) {
