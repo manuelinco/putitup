@@ -15,6 +15,7 @@ import referralRouter from "./referral";
 import telegramRouter from "./telegram";
 import exportRouter from "./export";
 import uploadRouter from "./upload";
+import otpRouter from "./otp";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(referralRouter);
 router.use(telegramRouter);
 router.use(exportRouter);
 router.use(uploadRouter);
+router.use(otpRouter);
 
 export default router;
