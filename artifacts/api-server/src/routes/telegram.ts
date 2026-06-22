@@ -4,7 +4,7 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 const BOT_TOKEN = process.env["TELEGRAM_BOT_TOKEN"]?.split(/\s/)[0]?.trim();
-const MINI_APP_URL = process.env["MINI_APP_URL"] ?? "https://putitup.replit.app/";
+const MINI_APP_URL = process.env["MINI_APP_URL"] ?? "https://tg.putitupbusiness.it/";
 
 async function sendTelegramRequest(method: string, body: object) {
   if (!BOT_TOKEN) return null;
