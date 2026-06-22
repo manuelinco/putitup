@@ -90,7 +90,7 @@ interface PendingPayment {
   } | null;
 }
 
-type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve";
+type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer";
 
 export default function Admin() {
   const { data: analytics } = useGetAnalyticsSummary();
@@ -106,6 +106,10 @@ export default function Admin() {
   const [approvalResult, setApprovalResult] = useState<string | null>(null);
   const [allDatasets, setAllDatasets] = useState<{id: number; name: string; status: string; recordCount: number | null}[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(false);
+
+  const [minipimer, setMinipimer] = useState<{id: number; name: string; category: string; status: string; approvedTasks: number; totalTasks: number; readyToExport: boolean}[]>([]);
+  const [minipimerLoading, setMinipimerLoading] = useState(false);
+  const [minipimerExporting, setMinipimerExporting] = useState<number | null>(null);
 
   const [batchTasks, setBatchTasks] = useState<TaskEntry[]>([emptyTask()]);
   const [currentTask, setCurrentTask] = useState<TaskEntry>(emptyTask());
@@ -255,13 +259,49 @@ export default function Admin() {
     }
   };
 
+  useEffect(() => {
+    if (activeSection !== "minipimer") return;
+    setMinipimerLoading(true);
+    apiFetch("/api/datasets/minipimer/summary")
+      .then((data: any) => setMinipimer(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setMinipimerLoading(false));
+  }, [activeSection]);
+
+  const handleMinipimerExport = async (dsId: number, dsName: string, format: "jsonl" | "json") => {
+    setMinipimerExporting(dsId);
+    try {
+      const res = await fetch(`${API_BASE}/api/datasets/${dsId}/minipimer?format=${format}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error ?? "Errore durante l'export");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safe = dsName.replace(/[^a-z0-9_-]/gi, "_").toLowerCase();
+      a.href = url;
+      a.download = `minipimer_${safe}_${dsId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Errore di connessione");
+    } finally {
+      setMinipimerExporting(null);
+    }
+  };
+
   const navItems: { id: ActiveSection; label: string; icon: React.ElementType }[] = [
     { id: "stats", label: "Stats", icon: BarChart2 },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
-    { id: "datasets", label: "Datasets", icon: Database },
-    { id: "payments", label: "Payments", icon: Wallet },
-    { id: "approve", label: "Approve", icon: CheckCircle },
-    { id: "users", label: "Users", icon: Users },
+    { id: "datasets", label: "Dataset", icon: Database },
+    { id: "payments", label: "Pagamenti", icon: Wallet },
+    { id: "approve", label: "Approva", icon: CheckCircle },
+    { id: "users", label: "Utenti", icon: Users },
+    { id: "minipimer", label: "Minipimer", icon: Download },
   ];
 
   return (
@@ -274,7 +314,7 @@ export default function Admin() {
         </div>
 
         {/* Nav Tabs */}
-        <div className="grid grid-cols-3 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           {navItems.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -782,6 +822,93 @@ export default function Admin() {
             <p className="text-[10px] text-muted-foreground text-center">
               Admin approval is always required before publishing. All datasets (including non-business) must be approved.
             </p>
+          </div>
+        )}
+
+        {/* ─── MINIPIMER ──────────────────────────────── */}
+        {activeSection === "minipimer" && (
+          <div className="space-y-3">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="p-3 pb-1">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <Download className="w-3.5 h-3.5" />
+                  Minipimer — Export Dataset
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-1">
+                <p className="text-[10px] text-muted-foreground mb-3">
+                  Compatta tutte le risposte approvate di un dataset in un singolo file JSONL o JSON, pronto per training AI.
+                  Solo i task con <strong>final_label</strong> impostato vengono inclusi.
+                </p>
+                {minipimerLoading && (
+                  <div className="text-xs text-muted-foreground text-center py-6">Caricamento dataset…</div>
+                )}
+                <div className="space-y-2 max-h-[65vh] overflow-y-auto">
+                  {minipimer.map((ds) => (
+                    <Card key={ds.id} className={cn("border-border/40", ds.readyToExport && "border-primary/30")}>
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1 min-w-0 mr-2">
+                            <p className="text-xs font-bold truncate">{ds.name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              #{ds.id} · {ds.category} · {ds.status}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 bg-muted/30 rounded-full h-1.5">
+                                <div
+                                  className="bg-primary h-1.5 rounded-full transition-all"
+                                  style={{ width: `${ds.totalTasks > 0 ? Math.min(100, (ds.approvedTasks / ds.totalTasks) * 100) : 0}%` }}
+                                />
+                              </div>
+                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                                {ds.approvedTasks.toLocaleString()} / {ds.totalTasks.toLocaleString()} approvati
+                              </span>
+                            </div>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={cn("text-[9px] shrink-0", ds.readyToExport ? "text-secondary border-secondary/40" : "text-muted-foreground")}
+                          >
+                            {ds.readyToExport ? "Pronto" : "Vuoto"}
+                          </Badge>
+                        </div>
+                        {ds.readyToExport ? (
+                          <div className="flex gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-[10px] h-7 border-primary/40 text-primary hover:bg-primary/10"
+                              disabled={minipimerExporting === ds.id}
+                              onClick={() => handleMinipimerExport(ds.id, ds.name, "jsonl")}
+                            >
+                              <Download className="w-3 h-3 mr-1" />
+                              {minipimerExporting === ds.id ? "Export…" : "JSONL"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-[10px] h-7 border-border/40 hover:border-primary/40 hover:text-primary"
+                              disabled={minipimerExporting === ds.id}
+                              onClick={() => handleMinipimerExport(ds.id, ds.name, "json")}
+                            >
+                              <Download className="w-3 h-3 mr-1" />
+                              JSON
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground text-center py-1">
+                            Nessun task approvato — completa il workflow di consenso prima
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {!minipimerLoading && minipimer.length === 0 && (
+                    <div className="text-xs text-muted-foreground text-center py-8">Nessun dataset trovato</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
