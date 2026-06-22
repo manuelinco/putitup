@@ -9,6 +9,7 @@ import Catalog from "@/pages/catalog";
 import DatasetDetail from "@/pages/dataset-detail";
 import Pricing from "@/pages/pricing";
 import Dashboard from "@/pages/dashboard";
+import AdminLogin from "@/pages/admin-login";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/catalog/:id" component={DatasetDetail} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/admin-login" component={AdminLogin} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -303,4 +303,44 @@ router.post("/auth/client/logout", async (req: Request, res: Response): Promise<
   res.json({ ok: true });
 });
 
+router.post("/auth/admin/login", (req: Request, res: Response): void => {
+  const { username, password } = req.body ?? {};
+  const adminUser = process.env["ADMIN_USERNAME"] ?? "";
+  const adminPass = process.env["ADMIN_PASSWORD"] ?? "";
+
+  if (!adminUser || !adminPass) {
+    res.status(503).json({ error: "Admin not configured" });
+    return;
+  }
+
+  let ok = false;
+  try {
+    const uBuf = Buffer.from(String(username ?? ""));
+    const uRef = Buffer.from(adminUser);
+    const pBuf = Buffer.from(String(password ?? ""));
+    const pRef = Buffer.from(adminPass);
+    ok = uBuf.length === uRef.length && pBuf.length === pRef.length
+      && timingSafeEqual(uBuf, uRef) && timingSafeEqual(pBuf, pRef);
+  } catch {}
+
+  if (!ok) {
+    res.status(401).json({ error: "Credenziali non valide" });
+    return;
+  }
+
+  const token = generateSessionToken(0);
+  res.json({ ok: true, token, role: "admin" });
+});
+
+router.get("/auth/admin/me", (req: Request, res: Response): void => {
+  const authHeader = req.headers["authorization"] ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const clientId = verifySessionToken(token);
+  if (clientId !== 0) {
+    res.status(401).json({ error: "Non autenticato come admin" });
+    return;
+  }
+  res.json({ ok: true, role: "admin" });
+});
+
 export default router;
