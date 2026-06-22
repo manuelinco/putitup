@@ -14,7 +14,7 @@ const isProduction = process.env.NODE_ENV === "production";
 
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  hsts: isProduction ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+  hsts: isProduction ? { maxAge: 63072000, includeSubDomains: true, preload: true } : false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -22,14 +22,45 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https:"],
+      baseUri: ["'self'"],
+      fontSrc: ["'self'", "https:", "data:"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
     },
   },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   permittedCrossDomainPolicies: { permittedPolicies: "none" },
 }));
 
+// Permissions-Policy header (not yet in helmet)
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Permissions-Policy",
+    "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
+  );
+  next();
+});
+
+const ALLOWED_ORIGINS = [
+  "https://putitupbusiness.it",
+  "https://www.putitupbusiness.it",
+  "https://tg.putitupbusiness.it",
+  "https://manuelinco.github.io",
+  // Replit preview and dev domains
+  /\.replit\.dev$/,
+  /\.repl\.co$/,
+];
+
 app.use(cors({
-  origin: "*",
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // same-origin / server-to-server
+    const allowed = ALLOWED_ORIGINS.some((o) =>
+      typeof o === "string" ? o === origin : o.test(origin)
+    );
+    if (allowed) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: false,
