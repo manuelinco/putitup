@@ -80,14 +80,23 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     ipAddress: getIp(req),
   });
 
+  let devCode: string | undefined;
   try {
-    await sendOtpEmail(email, code, isNewUser);
+    const result = await sendOtpEmail(email, code, isNewUser);
+    if (result.devCode) devCode = result.devCode;
   } catch (err: any) {
     res.status(500).json({ error: "Errore invio email. Riprova." });
     return;
   }
 
-  res.json({ ok: true, isNewUser, message: `Codice inviato a ${email}` });
+  res.json({
+    ok: true,
+    isNewUser,
+    message: devCode
+      ? `[DEV] Email non inviata — codice: ${devCode}`
+      : `Codice inviato a ${email}`,
+    ...(devCode ? { devCode } : {}),
+  });
 });
 
 router.post("/auth/otp/verify", async (req: Request, res: Response): Promise<void> => {

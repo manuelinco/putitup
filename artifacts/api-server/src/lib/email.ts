@@ -76,8 +76,27 @@ function otpEmailHtml(code: string, isNewUser: boolean): string {
 </html>`;
 }
 
-export async function sendOtpEmail(to: string, code: string, isNewUser: boolean): Promise<void> {
-  if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
+const IS_DEV = process.env.NODE_ENV !== "production";
+
+export interface SendOtpResult {
+  sent: boolean;
+  devCode?: string; // only present in development when email fails
+}
+
+export async function sendOtpEmail(
+  to: string,
+  code: string,
+  isNewUser: boolean
+): Promise<SendOtpResult> {
+  // In dev, always log the code so we can test without email
+  if (IS_DEV) {
+    console.log(`\n📧 OTP DEV MODE — to: ${to} | code: ${code} | newUser: ${isNewUser}\n`);
+  }
+
+  if (!RESEND_API_KEY) {
+    if (IS_DEV) return { sent: false, devCode: code };
+    throw new Error("RESEND_API_KEY not configured");
+  }
 
   const subject = isNewUser
     ? `⚡ ${code} — Codice di verifica PUTITUP`
@@ -101,7 +120,11 @@ export async function sendOtpEmail(to: string, code: string, isNewUser: boolean)
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend error ${res.status}: ${err}`);
+    const errText = await res.text();
+    console.error(`Resend error ${res.status}: ${errText}`);
+    if (IS_DEV) return { sent: false, devCode: code };
+    throw new Error(`Resend error ${res.status}: ${errText}`);
   }
+
+  return { sent: true };
 }

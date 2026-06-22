@@ -45,7 +45,14 @@ export default function Login() {
       if (data.isNewUser) { navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`); return; }
       setStep("code");
       startCooldown();
-      setTimeout(() => codeRefs.current[0]?.focus(), 100);
+      // Dev mode: auto-fill the code if returned by API
+      if (data.devCode && data.devCode.length === 6) {
+        const digits = data.devCode.split("");
+        setCode(digits);
+        setTimeout(() => handleVerify(data.devCode), 300);
+      } else {
+        setTimeout(() => codeRefs.current[0]?.focus(), 100);
+      }
     } catch {
       setError("Errore di connessione — riprova");
     } finally {
