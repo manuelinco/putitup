@@ -167,6 +167,7 @@ export default function Register() {
       localStorage.setItem("pb_client_email", data.client.email);
       localStorage.setItem("pb_client_name", `${data.client.firstName} ${data.client.lastName}`);
       localStorage.setItem("pb_client_company", data.client.company ?? "");
+      localStorage.setItem("pb_client_plan", selectedPlan);
       window.dispatchEvent(new Event("storage"));
       setSuccess(true);
       setTimeout(() => navigate("/dashboard"), 1500);

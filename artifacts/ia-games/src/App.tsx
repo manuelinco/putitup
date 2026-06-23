@@ -7,16 +7,31 @@ import { AuthProvider, useAuth } from "@/contexts/auth";
 import { LoginScreen } from "@/components/login-screen";
 import { NicknameModal } from "@/components/nickname-modal";
 import { useTelegramInit } from "@/hooks/useTelegram";
-import NotFound from "@/pages/not-found";
+import { Component, lazy, Suspense, type ReactNode, type ErrorInfo } from "react";
+
+// Eager: pagine più usate
 import Home from "@/pages/home";
 import Tasks from "@/pages/tasks";
-import Leaderboard from "@/pages/leaderboard";
-import Profile from "@/pages/profile";
-import Admin from "@/pages/admin";
-import AdminClaim from "@/pages/admin-claim";
-import Controller from "@/pages/supervisor";
-import UploadPage from "@/pages/upload";
-import { Component, type ReactNode, type ErrorInfo } from "react";
+import NotFound from "@/pages/not-found";
+
+// Lazy: pagine pesanti o rare
+const Leaderboard = lazy(() => import("@/pages/leaderboard"));
+const Profile     = lazy(() => import("@/pages/profile"));
+const Admin       = lazy(() => import("@/pages/admin"));
+const AdminClaim  = lazy(() => import("@/pages/admin-claim"));
+const Controller  = lazy(() => import("@/pages/supervisor"));
+const UploadPage  = lazy(() => import("@/pages/upload"));
+
+function PageLoader() {
+  return (
+    <div style={{ minHeight: "100dvh", background: "#0a0a0f", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: "32px", marginBottom: "8px" }}>⚡</div>
+        <div style={{ width: "32px", height: "3px", background: "#6d28d9", borderRadius: "2px", margin: "0 auto", animation: "pulse 1s infinite" }} />
+      </div>
+    </div>
+  );
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -58,17 +73,19 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/tasks" component={Tasks} />
-      <Route path="/leaderboard" component={Leaderboard} />
-      <Route path="/profile/:id" component={Profile} />
-      <Route path="/admin" component={Admin} />
-      <Route path="/admin-claim" component={AdminClaim} />
-      <Route path="/controller" component={Controller} />
-      <Route path="/upload" component={UploadPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/tasks" component={Tasks} />
+        <Route path="/leaderboard" component={Leaderboard} />
+        <Route path="/profile/:id" component={Profile} />
+        <Route path="/admin" component={Admin} />
+        <Route path="/admin-claim" component={AdminClaim} />
+        <Route path="/controller" component={Controller} />
+        <Route path="/upload" component={UploadPage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
