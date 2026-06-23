@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 const rawPort = process.env.PORT;
@@ -13,6 +14,63 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "auto",
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        runtimeCaching: [
+          // Immagini task da picsum — cache a lungo
+          {
+            urlPattern: /^https:\/\/picsum\.photos\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "picsum-images",
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Font Google — cache a lungo
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "google-fonts-stylesheets" },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-webfonts",
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // API — NetworkFirst con fallback 5s
+          {
+            urlPattern: /\/api\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      manifest: {
+        name: "PUTITUP",
+        short_name: "PUTITUP",
+        description: "AI Data Platform — Etichetta dati, guadagna TON",
+        theme_color: "#0a0a0f",
+        background_color: "#0a0a0f",
+        display: "standalone",
+        icons: [
+          { src: "/favicon.png", sizes: "192x192", type: "image/png" },
+          { src: "/favicon.png", sizes: "512x512", type: "image/png" },
+        ],
+      },
+    }),
   ],
   resolve: {
     alias: {

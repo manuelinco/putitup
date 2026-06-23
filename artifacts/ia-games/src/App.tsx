@@ -9,12 +9,12 @@ import { NicknameModal } from "@/components/nickname-modal";
 import { useTelegramInit } from "@/hooks/useTelegram";
 import { Component, lazy, Suspense, type ReactNode, type ErrorInfo } from "react";
 
-// Eager: pagine più usate
+// Eager: solo Home (landing page, 170 righe)
 import Home from "@/pages/home";
-import Tasks from "@/pages/tasks";
 import NotFound from "@/pages/not-found";
 
-// Lazy: pagine pesanti o rare
+// Lazy: tutto il resto carica solo quando serve
+const Tasks       = lazy(() => import("@/pages/tasks"));
 const Leaderboard = lazy(() => import("@/pages/leaderboard"));
 const Profile     = lazy(() => import("@/pages/profile"));
 const Admin       = lazy(() => import("@/pages/admin"));
@@ -65,8 +65,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30000,
+      staleTime: 60000,   // 1 min — riduce chiamate API ridondanti
+      gcTime: 300000,     // 5 min in cache
       retry: 1,
+      refetchOnWindowFocus: false,
     },
   },
 });
