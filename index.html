@@ -1,16 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>PUTITUP</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+
+    <!-- DNS prefetch per API e risorse esterne -->
+    <link rel="dns-prefetch" href="https://putitup-api.onrender.com" />
+    <link rel="preconnect" href="https://putitup-api.onrender.com" crossorigin />
+    <link rel="dns-prefetch" href="https://picsum.photos" />
+    <link rel="dns-prefetch" href="https://ton-connect.github.io" />
+
+    <!-- Font: preconnect + font-display swap, non bloccante -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=optional" rel="stylesheet" />
+
+    <!-- Telegram SDK: deve restare in head (requisito Telegram) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
     <style>
+      /* Splash screen inline — visibile prima del JS */
       #splash {
         position: fixed;
         inset: 0;
@@ -20,8 +32,10 @@
         align-items: center;
         justify-content: center;
         z-index: 9999;
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: system-ui, -apple-system, 'Inter', sans-serif;
+        transition: opacity 0.3s ease;
       }
+      #splash.hidden { opacity: 0; pointer-events: none; }
       #splash-logo {
         font-size: 32px;
         font-weight: 900;
@@ -37,29 +51,41 @@
         text-transform: uppercase;
         margin-bottom: 40px;
       }
-      #splash-spinner {
-        width: 36px;
-        height: 36px;
-        border: 3px solid #2d1b69;
-        border-top-color: #a855f7;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+      #splash-bar {
+        width: 120px;
+        height: 3px;
+        background: #1e1b4b;
+        border-radius: 2px;
+        overflow: hidden;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      #splash-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #7c3aed, #a855f7);
+        border-radius: 2px;
+        animation: load 1.2s ease-in-out infinite;
+        transform-origin: left;
+      }
+      @keyframes load {
+        0%   { transform: scaleX(0); opacity: 1; }
+        50%  { transform: scaleX(0.7); opacity: 1; }
+        100% { transform: scaleX(1); opacity: 0; }
+      }
+      /* Previeni flash bianco */
+      html, body { background: #0d0d1a; margin: 0; padding: 0; }
     </style>
-    <script type="module" crossorigin src="/assets/index-BZawrB3J.js"></script>
+    <script type="module" crossorigin src="/assets/index-BIT6VMp9.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-wouter-DipwSxtl.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-query-hJZcp1R4.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-query-CGlsPiwP.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-CAYxt9lC.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-ton-BbeNn9AQ.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-BYiQgzHF.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ton-FU3JyInI.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-ui-qQBpP22S.js">
     <link rel="stylesheet" crossorigin href="/assets/index-pYKoWxRx.css">
-  </head>
+  <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
   <body>
     <div id="splash">
       <div id="splash-logo">PUTIT<span>UP</span></div>
       <div id="splash-sub">AI Data Platform</div>
-      <div id="splash-spinner"></div>
+      <div id="splash-bar"><div id="splash-bar-fill"></div></div>
     </div>
     <div id="root"></div>
   </body>
