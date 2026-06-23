@@ -47,6 +47,17 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     return;
   }
 
+  // Block registration if email already exists
+  const [existingClient] = await db
+    .select({ id: clientsTable.id, email: clientsTable.email, firstName: clientsTable.firstName })
+    .from(clientsTable)
+    .where(eq(clientsTable.email, email));
+
+  if (existingClient) {
+    res.status(409).json({ error: "Questa email è già registrata. Accedi dalla pagina di login." });
+    return;
+  }
+
   const now = new Date();
 
   const recentOtps = await db
@@ -64,12 +75,6 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     return;
   }
 
-  const [existingClient] = await db
-    .select({ id: clientsTable.id, email: clientsTable.email, firstName: clientsTable.firstName })
-    .from(clientsTable)
-    .where(eq(clientsTable.email, email));
-
-  const isNewUser = !existingClient;
   const code = generateOtp();
   const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MS);
 
@@ -82,16 +87,15 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
 
   let devCode: string | undefined;
   try {
-    const result = await sendOtpEmail(email, code, isNewUser);
+    const result = await sendOtpEmail(email, code, true);
     if (result.devCode) devCode = result.devCode;
   } catch (err: any) {
-    res.status(500).json({ error: "Errore invio email. Riprova." });
+    res.status(500).json({ error: "Errore invio email. Riprova tra qualche istante." });
     return;
   }
 
   res.json({
     ok: true,
-    isNewUser,
     message: devCode
       ? `[DEV] Email non inviata — codice: ${devCode}`
       : `Codice inviato a ${email}`,
@@ -158,37 +162,15 @@ router.post("/auth/otp/verify", async (req: Request, res: Response): Promise<voi
 
   await db.update(clientOtpCodesTable).set({ used: true }).where(eq(clientOtpCodesTable.id, otp.id));
 
-  const [existingClient] = await db
-    .select()
-    .from(clientsTable)
-    .where(eq(clientsTable.email, email));
-
-  if (!existingClient) {
-    res.json({ ok: true, isNewUser: true, email });
-    return;
-  }
-
-  const token = generateSessionToken(existingClient.id);
-  const sessionExpiry = new Date(now.getTime() + SESSION_EXPIRY_MS);
-
-  await db.insert(clientSessionsTable).values({
-    clientId: existingClient.id,
-    token,
-    expiresAt: sessionExpiry,
-    userAgent: req.headers["user-agent"] ?? null,
-    ipAddress: getIp(req),
-  });
-
-  await db
-    .delete(clientSessionsTable)
-    .where(lt(clientSessionsTable.expiresAt, now));
-
-  const { passwordHash: _ph, ...safeClient } = existingClient as any;
-  res.json({ ok: true, isNewUser: false, token, client: safeClient });
+  // OTP verified — always a new user at this point (existing users blocked at /send)
+  res.json({ ok: true, isNewUser: true, email });
 });
 
 router.post("/auth/otp/register", async (req: Request, res: Response): Promise<void> => {
-  const { email, firstName, lastName, company, phone, plan } = req.body ?? {};
+  const {
+    email, firstName, lastName, company, phone, plan,
+    vatCode, address, postalCode, city,
+  } = req.body ?? {};
 
   if (!email || !firstName || !lastName) {
     res.status(400).json({ error: "Nome, cognome ed email sono obbligatori" });
@@ -211,7 +193,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
     .limit(1);
 
   if (!verifiedOtp.length) {
-    res.status(403).json({ error: "Sessione OTP scaduta. Ricomincia dal login." });
+    res.status(403).json({ error: "Sessione OTP scaduta. Ricomincia la registrazione." });
     return;
   }
 
@@ -232,7 +214,10 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
       lastName: String(lastName).trim(),
       email: normalizedEmail,
       phone: String(phone ?? "").trim() || "—",
-      address: "—",
+      address: String(address ?? "").trim() || "—",
+      city: String(city ?? "").trim() || null,
+      postalCode: String(postalCode ?? "").trim() || null,
+      vatCode: String(vatCode ?? "").trim() || null,
       company: String(company ?? "").trim() || null,
     })
     .returning();
@@ -254,7 +239,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
   });
 
   const { passwordHash: _ph, ...safeClient } = newClient as any;
-  res.json({ ok: true, token, client: safeClient });
+  res.json({ ok: true, token, client: safeClient, plan: String(plan ?? "free") });
 });
 
 router.get("/auth/client/me", async (req: Request, res: Response): Promise<void> => {
@@ -288,6 +273,10 @@ router.get("/auth/client/me", async (req: Request, res: Response): Promise<void>
     res.status(401).json({ error: "Sessione scaduta. Accedi di nuovo." });
     return;
   }
+
+  await db
+    .delete(clientSessionsTable)
+    .where(lt(clientSessionsTable.expiresAt, now));
 
   const [client] = await db
     .select()
