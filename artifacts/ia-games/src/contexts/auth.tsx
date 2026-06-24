@@ -234,6 +234,16 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
           saveSession((u as AuthUser).id, "wallet");
           setNeedsNickname(false);
           setNeedsWalletConnect(false);
+          // Link telegram_id if we are inside Telegram and it isn't saved yet
+          const tgUser = getTelegramUser();
+          if (tgUser && !(u as AuthUser).telegramId) {
+            apiFetch(`/api/users/${(u as AuthUser).id}`, {
+              method: "PATCH",
+              body: JSON.stringify({ telegramId: tgUser.id }),
+            }).then((updated) => {
+              if (updated) setAndCacheUser(updated as AuthUser);
+            }).catch(() => {});
+          }
           setPendingWallet(null);
         } else {
           setPendingWallet(addr);
