@@ -55,7 +55,7 @@ router.post("/admin/claim", async (req, res): Promise<void> => {
 
   const [updated] = await db
     .update(usersTable)
-    .set({ isAdmin: true })
+    .set({ isAdmin: true, isSupervisor: true })
     .where(eq(usersTable.id, user.id))
     .returning();
 
