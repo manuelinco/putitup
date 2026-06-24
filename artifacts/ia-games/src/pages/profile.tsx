@@ -298,7 +298,7 @@ export default function Profile() {
                     Collega TON Wallet
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: 10, color: "#666" }}>
-                    Ricevi 0,00004 TON per ogni task
+                    Ricevi 0,002 TON per ogni task
                   </p>
                 </>
               )}

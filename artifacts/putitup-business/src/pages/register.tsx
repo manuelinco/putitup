@@ -167,7 +167,7 @@ export default function Register() {
       localStorage.setItem("pb_client_plan", form.plan);
       window.dispatchEvent(new Event("storage"));
       setSuccess(true);
-      setTimeout(() => navigate("/dashboard"), 1500);
+      setTimeout(() => navigate("/dashboard"), 2500);
     } catch {
       setError("Errore di connessione — riprova");
     } finally {
@@ -178,10 +178,24 @@ export default function Register() {
   if (success) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-        <Card className="w-full max-w-md border-border bg-card text-center p-8">
-          <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-4" />
-          <h2 className="text-xl font-bold">Account creato! 🎉</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Benvenuto su PUTITUP Business. Redirect in corso…</p>
+        <Card className="w-full max-w-md border-border bg-card text-center p-8 space-y-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mx-auto">
+            <CheckCircle2 className="h-9 w-9 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">Account creato!</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Benvenuto su PUTITUP Business, {form.firstName}.
+            </p>
+          </div>
+          <div className="rounded-lg bg-muted px-4 py-3 text-sm text-left space-y-1">
+            <p><span className="font-semibold">Piano:</span> {form.plan.charAt(0).toUpperCase() + form.plan.slice(1)}</p>
+            <p><span className="font-semibold">Email:</span> {form.email}</p>
+          </div>
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <div className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            Accesso alla dashboard in corso…
+          </div>
         </Card>
       </div>
     );

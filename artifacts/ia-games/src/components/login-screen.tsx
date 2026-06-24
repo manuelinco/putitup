@@ -91,7 +91,7 @@ export function LoginScreen({ telegramOnboarding = false }: { telegramOnboarding
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#fff" }}>TON Wallet</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Ricevi 0,00004 TON per ogni task completato</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Ricevi 0,002 TON per ogni task completato</p>
             </div>
           </div>
         )}

@@ -26,7 +26,7 @@ const typeLabels: Record<string, string> = {
   classification: "CLASSIFICATION",
 };
 
-const TON_PER_TASK = 0.00004;
+const TON_PER_TASK = 0.002;
 
 export default function Tasks() {
   const queryClient = useQueryClient();

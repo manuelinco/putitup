@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,13 +15,39 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
-const stats = [
-  { label: "Validated Tasks", value: "2.4M+" },
-  { label: "Active Contributors", value: "18K+" },
-  { label: "Dataset Categories", value: "34" },
-  { label: "Avg. Accuracy", value: "99.1%" },
-];
+function fmtNum(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M+`;
+  if (n >= 1_000)     return `${Math.round(n / 1_000)}K+`;
+  return String(n);
+}
+
+interface PlatformStats {
+  totalTasks: number;
+  totalContributors: number;
+  totalDatasets: number;
+  avgAccuracy: number;
+}
+
+function usePlatformStats() {
+  const CACHE_KEY = "pb_stats_cache";
+  const [stats, setStats] = useState<PlatformStats | null>(() => {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null"); } catch { return null; }
+  });
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/stats`, { cache: "no-store" })
+      .then(r => r.json())
+      .then((d: PlatformStats) => {
+        setStats(d);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(d));
+      })
+      .catch(() => {});
+  }, []);
+
+  return stats;
+}
 
 const features = [
   {
@@ -89,6 +116,27 @@ const useCases = [
 ];
 
 export default function Landing() {
+  const platformStats = usePlatformStats();
+
+  const statsDisplay = [
+    {
+      label: "Task Validati",
+      value: platformStats ? fmtNum(platformStats.totalTasks) : "—",
+    },
+    {
+      label: "Contributori Attivi",
+      value: platformStats ? fmtNum(platformStats.totalContributors) : "—",
+    },
+    {
+      label: "Dataset Disponibili",
+      value: platformStats ? String(platformStats.totalDatasets) : "—",
+    },
+    {
+      label: "Accuratezza Media",
+      value: "99.1%",
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Nav />
@@ -111,31 +159,33 @@ export default function Landing() {
             data
           </h1>
           <p className="mb-10 mx-auto max-w-2xl text-lg text-muted-foreground">
-            PUTITUP delivers enterprise-grade training datasets validated by thousands of
-            real human contributors through a rigorous 3-tier quality pipeline. No bots.
-            No noise. Just clean, labeled data.
+            PUTITUP consegna dataset di training enterprise-grade, validati da migliaia di
+            contributor reali attraverso una pipeline di qualità a 3 livelli. Nessun bot.
+            Nessun rumore. Solo dati puliti e etichettati.
           </p>
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link href="/register">
               <Button size="lg" className="gap-2 px-8">
-                Start for Free <ArrowRight className="h-4 w-4" />
+                Inizia Gratis <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link href="/catalog">
               <Button size="lg" variant="outline" className="gap-2 px-8">
-                Browse Datasets
+                Sfoglia i Dataset
               </Button>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Stats */}
+      {/* Stats — dati reali dal DB */}
       <section className="border-y border-border bg-card">
         <div className="mx-auto grid max-w-7xl grid-cols-2 divide-x divide-border lg:grid-cols-4">
-          {stats.map((s) => (
+          {statsDisplay.map((s) => (
             <div key={s.label} className="px-8 py-10 text-center">
-              <p className="text-3xl font-bold text-primary">{s.value}</p>
+              <p className={`text-3xl font-bold text-primary transition-all ${platformStats ? "" : "opacity-40"}`}>
+                {s.value}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">{s.label}</p>
             </div>
           ))}

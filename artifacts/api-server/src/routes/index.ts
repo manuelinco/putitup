@@ -16,10 +16,12 @@ import telegramRouter from "./telegram";
 import exportRouter from "./export";
 import uploadRouter from "./upload";
 import otpRouter from "./otp";
+import statsRouter from "./stats";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(statsRouter);
 router.use(authRouter);
 router.use(usersRouter);
 router.use(tasksRouter);
