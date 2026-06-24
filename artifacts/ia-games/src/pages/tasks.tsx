@@ -56,6 +56,8 @@ export default function Tasks() {
   const [showAdChallenge, setShowAdChallenge] = useState(false);
   const [adPending, setAdPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [botPenaltyUntil, setBotPenaltyUntil] = useState(0);
+  const [botCooldownSec, setBotCooldownSec] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const startTime = useRef<number>(Date.now());
 
@@ -187,10 +189,30 @@ export default function Tasks() {
     refetchTask();
   };
 
+  // Anti-bot penalty: drain energy + 90s cooldown before next ad
   const handleAdFail = () => {
     setShowAdChallenge(false);
     notification("error");
+    const until = Date.now() + 90_000;
+    setBotPenaltyUntil(until);
+    setBotCooldownSec(90);
   };
+
+  // Countdown ticker for bot penalty
+  useEffect(() => {
+    if (botPenaltyUntil <= Date.now()) return;
+    const interval = setInterval(() => {
+      const remaining = Math.ceil((botPenaltyUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setBotCooldownSec(0);
+        setBotPenaltyUntil(0);
+        clearInterval(interval);
+      } else {
+        setBotCooldownSec(remaining);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [botPenaltyUntil]);
 
 
   const payload = task?.dataPayload as Record<string, unknown> | undefined;
@@ -260,21 +282,36 @@ export default function Tasks() {
           </div>
         </div>
 
+        {/* Bot penalty warning — shown when user failed the red dot challenge */}
+        {botCooldownSec > 0 && (
+          <div className="flex items-center justify-between p-3 rounded-xl border border-red-500/60 bg-red-500/10 animate-pulse">
+            <div>
+              <p className="text-xs font-black text-red-400">🤖 Bot detected — ads blocked</p>
+              <p className="text-[10px] text-muted-foreground">You missed the red dot. Wait {botCooldownSec}s</p>
+            </div>
+            <div className="flex items-center justify-center w-12 h-8 rounded-lg border border-red-500/40 bg-red-500/20">
+              <span className="text-xs font-black text-red-400">{botCooldownSec}s</span>
+            </div>
+          </div>
+        )}
+
         {/* Low energy warning */}
         {energy < 20 && (
           <div className="flex items-center justify-between p-3 rounded-xl border border-destructive/40 bg-destructive/10">
             <div>
               <p className="text-xs font-black text-destructive">Energy depleted!</p>
-              <p className="text-[10px] text-muted-foreground">Watch an ad to recharge</p>
+              <p className="text-[10px] text-muted-foreground">
+                {botCooldownSec > 0 ? `Ad blocked — bot penalty (${botCooldownSec}s)` : "Watch an ad to recharge"}
+              </p>
             </div>
             <Button
               size="sm"
               variant="outline"
               className="text-xs border-destructive/40 text-destructive h-8"
               onClick={() => setShowAdChallenge(true)}
-              disabled={watchAd.isPending}
+              disabled={watchAd.isPending || botCooldownSec > 0}
             >
-              Watch Ad
+              {botCooldownSec > 0 ? `${botCooldownSec}s` : "Watch Ad"}
             </Button>
           </div>
         )}

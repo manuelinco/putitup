@@ -51,17 +51,13 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     return;
   }
 
-  // Block registration if email already exists
+  // Check if user already exists — determines login vs registration flow
   const [existingClient] = await db
     .select({ id: clientsTable.id, email: clientsTable.email, firstName: clientsTable.firstName })
     .from(clientsTable)
     .where(eq(clientsTable.email, email));
 
-  if (existingClient) {
-    res.status(409).json({ error: "This email is already registered. Please sign in." });
-    return;
-  }
-
+  const isNewUser = !existingClient;
   const now = new Date();
 
   const recentOtps = await db
@@ -100,6 +96,7 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
 
   res.json({
     ok: true,
+    isNewUser,
     message: devCode
       ? `[DEV] Email not sent — code: ${devCode}`
       : `Code sent to ${email}`,
@@ -166,7 +163,33 @@ router.post("/auth/otp/verify", async (req: Request, res: Response): Promise<voi
 
   await db.update(clientOtpCodesTable).set({ used: true }).where(eq(clientOtpCodesTable.id, otp.id));
 
-  // OTP verified — always a new user at this point (existing users blocked at /send)
+  // Check if this is a login (existing client) or registration (new client)
+  const [existingClient] = await db
+    .select()
+    .from(clientsTable)
+    .where(eq(clientsTable.email, email));
+
+  if (existingClient) {
+    // LOGIN FLOW: generate session token and return client data
+    if (existingClient.isBlocked) {
+      res.status(403).json({ error: "Account blocked. Contact support." });
+      return;
+    }
+    const token = generateSessionToken(existingClient.id);
+    const sessionExpiry = new Date(Date.now() + SESSION_EXPIRY_MS);
+    await db.insert(clientSessionsTable).values({
+      clientId: existingClient.id,
+      token,
+      expiresAt: sessionExpiry,
+      userAgent: req.headers["user-agent"] ?? null,
+      ipAddress: getIp(req),
+    });
+    const { passwordHash: _ph, ...safeClient } = existingClient as any;
+    res.json({ ok: true, isNewUser: false, token, client: safeClient });
+    return;
+  }
+
+  // REGISTRATION FLOW: OTP verified, proceed to fill in details
   res.json({ ok: true, isNewUser: true, email });
 });
 
