@@ -286,7 +286,7 @@ export default function Profile() {
               {wallet ? (
                 <>
                   <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#4fc3f7" }}>
-                    TON Wallet collegato
+                    TON Wallet connected
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: 10, color: "#666", fontFamily: "monospace" }}>
                     {wallet.account.address.slice(0, 10)}…{wallet.account.address.slice(-8)}
@@ -295,10 +295,10 @@ export default function Profile() {
               ) : (
                 <>
                   <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#a78bfa" }}>
-                    Collega TON Wallet
+                    Connect TON Wallet
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: 10, color: "#666" }}>
-                    Ricevi 0,002 TON per ogni task
+                    Earn 0.00004 TON per task
                   </p>
                 </>
               )}
@@ -315,7 +315,7 @@ export default function Profile() {
                   cursor: "pointer", whiteSpace: "nowrap",
                 }}
               >
-                Connetti
+                Connect
               </button>
             )}
           </div>
