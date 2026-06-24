@@ -1,7 +1,14 @@
 const RESEND_API_KEY = process.env["RESEND_API_KEY"];
 const FROM = "PUTITUP Business <noreply@putitupbusiness.it>";
 
+/** Escape HTML per prevenire XSS in template email */
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+}
+
 function otpEmailHtml(code: string, isNewUser: boolean): string {
+  const safeCode = escHtml(code);
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
@@ -62,7 +69,7 @@ function otpEmailHtml(code: string, isNewUser: boolean): string {
                     <tr>
                       <td style="background-color:#f5f3ff;border:2px solid #7c3aed;border-radius:12px;padding:28px;text-align:center;">
                         <p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#7c3aed;">Codice di verifica</p>
-                        <p style="margin:0;font-size:48px;font-weight:900;letter-spacing:14px;color:#1a1a2e;font-family:'Courier New',Courier,monospace;">${code}</p>
+                        <p style="margin:0;font-size:48px;font-weight:900;letter-spacing:14px;color:#1a1a2e;font-family:'Courier New',Courier,monospace;">${safeCode}</p>
                         <p style="margin:12px 0 0;font-size:13px;color:#9ca3af;">Valido per <strong style="color:#4b5563;">10 minuti</strong></p>
                       </td>
                     </tr>

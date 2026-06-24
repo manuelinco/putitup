@@ -97,7 +97,12 @@ router.post("/auth/telegram/validate", async (req, res): Promise<void> => {
  * Body: { clientId: number }
  * Returns: { challengeToken: string, expiresAt: number }
  */
-const AD_CHALLENGE_SECRET = process.env.SESSION_SECRET ?? "putitup_ad_challenge_secret";
+// Usa SESSION_SECRET obbligatoriamente — nessun fallback hardcoded
+const AD_CHALLENGE_SECRET = (() => {
+  const s = process.env.SESSION_SECRET;
+  if (!s) throw new Error("SESSION_SECRET env var is required");
+  return s;
+})();
 const AD_CHALLENGE_TTL_MS = 120_000;
 
 router.post("/auth/ads/challenge", async (req, res): Promise<void> => {

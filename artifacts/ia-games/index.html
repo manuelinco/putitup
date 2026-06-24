@@ -18,8 +18,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=optional" rel="stylesheet" />
 
-    <!-- Telegram SDK: deve restare in head (requisito Telegram) -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Telegram SDK: deve restare in head (requisito Telegram).
+         SRI non applicabile (CDN Telegram aggiorna il file senza preavviso).
+         crossorigin="anonymous" limita il leakage di credenziali. -->
+    <script src="https://telegram.org/js/telegram-web-app.js" crossorigin="anonymous"></script>
 
     <style>
       /* Splash screen inline — visibile prima del JS */
