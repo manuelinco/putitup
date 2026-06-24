@@ -54,26 +54,30 @@ router.get("/tasks/stats", async (_req, res): Promise<void> => {
 });
 
 const DATASET_OPTIONS: Record<number, string[]> = {
+  // Text / NLP datasets
   10: ["positive", "negative", "neutral"],
   11: ["purchase", "browse", "return", "complaint", "inquiry"],
-  12: ["vehicle", "person", "building", "animal", "nature"],
-  13: ["PER", "ORG", "LOC", "DATE", "MISC"],
-  14: ["A1", "A2", "Both good", "Both poor"],
-  15: ["correct", "minor errors", "major errors", "completely wrong"],
-  16: ["cardiology", "neurology", "oncology", "emergency", "general"],
-  17: ["complaint", "question", "return", "compliment", "billing"],
-  18: ["enthusiastic", "negative", "neutral", "sarcastic"],
-  19: ["excellent", "good", "fair", "low"],
-  20: ["person", "car", "dog", "cat", "chair", "bird", "horse", "bus", "truck", "airplane"],
-  21: ["positive", "negative", "neutral", "mixed"],
-  22: ["spam", "not spam"],
-  23: ["relevant", "irrelevant", "partially relevant"],
-  24: ["A wins", "B wins", "tie", "both bad"],
-  25: ["safe", "unsafe", "borderline"],
-  26: ["agree", "disagree", "neutral"],
-  27: ["high quality", "medium quality", "low quality"],
-  28: ["correct", "incorrect", "partial"],
-  29: ["yes", "no", "maybe"],
+  13: ["Person", "Organization", "Location", "Date", "Product", "Other"],
+  14: ["Response A is better", "Response B is better", "Both are equally good", "Both are poor"],
+  15: ["Correct", "Minor errors", "Major errors", "Completely wrong"],
+  16: ["Cardiology", "Neurology", "Oncology", "Emergency", "General Practice", "Orthopedics"],
+  17: ["Complaint", "Question", "Return request", "Compliment", "Billing issue"],
+  18: ["Sincere", "Sarcastic", "Neutral", "Ambiguous"],
+  // Image datasets — options cover ANY photo (no impossible answers)
+  12: ["Person or people", "Animal or wildlife", "Vehicle or transport", "Building or architecture", "Nature or landscape", "Food or drink", "Electronics or technology", "Furniture or interior", "Other / Mixed"],
+  19: ["Excellent", "Good", "Fair", "Poor"],
+  20: ["Person or people", "Animal or wildlife", "Vehicle or transport", "Building or architecture", "Nature or landscape", "Food or drink", "Urban or street scene", "Abstract or texture", "Other"],
+  21: ["Happy or joyful", "Sad or upset", "Angry or frustrated", "Surprised or shocked", "Neutral or calm", "No person or face visible"],
+  22: ["Excellent — sharp, well-lit, professional", "Good — minor issues but usable", "Fair — noticeable blur or lighting problems", "Poor — very low quality or unusable"],
+  29: ["Urban or city environment", "Forest or woodland", "Countryside or farmland", "Coastal or water", "Desert or arid landscape", "Indoor or built interior", "Industrial or commercial site", "Other natural scene"],
+  // Audio datasets
+  23: ["Correct", "Minor word errors", "Missing words", "Completely wrong"],
+  24: ["Correct", "Minor errors", "Missing content", "Incorrect"],
+  25: ["Correct", "Minor errors", "Missing content", "Incorrect"],
+  26: ["English", "Italian", "French", "Spanish", "German", "Portuguese", "Other"],
+  27: ["Happy", "Sad", "Angry", "Calm", "Excited", "Fearful", "Neutral"],
+  // Video
+  28: ["Running", "Cooking", "Driving", "Playing sports", "Working", "Dancing", "Reading", "Other"],
 };
 
 const AUDIO_TRANSCRIPTION_OPTIONS = [
@@ -152,10 +156,13 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
   const maxId = Number(maxRow.maxId);
   const pivotId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
 
+  // Filter out tasks with non-English questions (Italian legacy tasks have à è é ì ò ù)
+  const englishOnly = sql`(${tasksTable.dataPayload}->>'question') !~ '[àèéìòùÀÈÉÌÒÙáãâäåæçñøœ]'`;
+
   const baseFilter =
     answeredTaskIds.length > 0
-      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds))
-      : eq(tasksTable.status, "active");
+      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds), englishOnly)
+      : and(eq(tasksTable.status, "active"), englishOnly);
 
   // Try from random pivot forward (index scan)
   let [task] = await db

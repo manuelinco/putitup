@@ -5,27 +5,32 @@ import { sql, count } from "drizzle-orm";
 const router = Router();
 
 router.get("/stats", async (_req, res): Promise<void> => {
-  try {
-    const [responses, users, datasets, accuracy] = await Promise.all([
-      // "Task Validati" = number of labeled task responses (grows as users work)
-      db.select({ n: count() }).from(taskResponsesTable),
-      // "Contributori Attivi" = registered users on the Mini App
-      db.select({ n: count() }).from(usersTable),
-      db.select({ n: count() }).from(datasetsTable),
-      db.select({
-        avg: sql<number>`ROUND(AVG(consensus_threshold) * 100, 1)`,
-      }).from(datasetsTable),
-    ]);
+  let totalTasks = 0, totalContributors = 0, totalDatasets = 0, avgAccuracy = 99.1;
 
-    res.json({
-      totalTasks:        Number(responses[0]?.n  ?? 0),
-      totalContributors: Number(users[0]?.n       ?? 0),
-      totalDatasets:     Number(datasets[0]?.n    ?? 0),
-      avgAccuracy:       Number(accuracy[0]?.avg  ?? 99.1),
-    });
-  } catch {
-    res.json({ totalTasks: 0, totalContributors: 0, totalDatasets: 0, avgAccuracy: 99.1 });
-  }
+  // Each query is independent — one failure doesn't zero out the rest
+  try {
+    const [r] = await db.select({ n: count() }).from(taskResponsesTable);
+    totalTasks = Number(r?.n ?? 0);
+  } catch {}
+
+  try {
+    const [r] = await db.select({ n: count() }).from(usersTable);
+    totalContributors = Number(r?.n ?? 0);
+  } catch {}
+
+  try {
+    const [r] = await db.select({ n: count() }).from(datasetsTable);
+    totalDatasets = Number(r?.n ?? 0);
+  } catch {}
+
+  try {
+    const [r] = await db.select({
+      avg: sql<number>`ROUND(AVG(consensus_threshold) * 100, 1)`,
+    }).from(datasetsTable);
+    if (r?.avg != null) avgAccuracy = Number(r.avg);
+  } catch {}
+
+  res.json({ totalTasks, totalContributors, totalDatasets, avgAccuracy });
 });
 
 export default router;

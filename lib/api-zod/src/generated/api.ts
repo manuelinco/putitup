@@ -87,6 +87,9 @@ export const UpdateUserBody = zod.object({
   username: zod.string().optional(),
   walletAddress: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
+  telegramId: zod.string().nullish(),
+  isSupervisor: zod.boolean().optional(),
+  isAdmin: zod.boolean().optional(),
 });
 
 export const UpdateUserResponse = zod.object({

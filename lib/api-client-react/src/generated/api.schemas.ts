@@ -51,6 +51,10 @@ export interface UpdateUserBody {
   walletAddress?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  /** @nullable */
+  telegramId?: string | null;
+  isSupervisor?: boolean;
+  isAdmin?: boolean;
 }
 
 export type UserStatsLevel =

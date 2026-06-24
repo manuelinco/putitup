@@ -739,6 +739,12 @@ components:
           type: ["string", "null"]
         avatarUrl:
           type: ["string", "null"]
+        telegramId:
+          type: ["string", "null"]
+        isSupervisor:
+          type: boolean
+        isAdmin:
+          type: boolean
 
     UserStats:
       type: object
