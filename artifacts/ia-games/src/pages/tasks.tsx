@@ -26,7 +26,7 @@ const typeLabels: Record<string, string> = {
   classification: "CLASSIFICATION",
 };
 
-const TON_PER_TASK = 0.002;
+const TON_PER_TASK = 0.00004;
 
 export default function Tasks() {
   const queryClient = useQueryClient();
@@ -56,8 +56,21 @@ export default function Tasks() {
   const [showAdChallenge, setShowAdChallenge] = useState(false);
   const [adPending, setAdPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [botPenaltyUntil, setBotPenaltyUntil] = useState(0);
-  const [botCooldownSec, setBotCooldownSec] = useState(0);
+  const BOT_PENALTY_KEY = "putitup_bot_penalty_until";
+  const [botPenaltyUntil, setBotPenaltyUntil] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(BOT_PENALTY_KEY);
+      const ts = stored ? parseInt(stored, 10) : 0;
+      return ts > Date.now() ? ts : 0;
+    } catch { return 0; }
+  });
+  const [botCooldownSec, setBotCooldownSec] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem(BOT_PENALTY_KEY);
+      const ts = stored ? parseInt(stored, 10) : 0;
+      return ts > Date.now() ? Math.ceil((ts - Date.now()) / 1000) : 0;
+    } catch { return 0; }
+  });
   const [isSpeaking, setIsSpeaking] = useState(false);
   const startTime = useRef<number>(Date.now());
 
@@ -189,11 +202,12 @@ export default function Tasks() {
     refetchTask();
   };
 
-  // Anti-bot penalty: drain energy + 90s cooldown before next ad
+  // Anti-bot penalty: drain energy + 90s cooldown before next ad (persists across refreshes)
   const handleAdFail = () => {
     setShowAdChallenge(false);
     notification("error");
     const until = Date.now() + 90_000;
+    try { localStorage.setItem(BOT_PENALTY_KEY, String(until)); } catch {}
     setBotPenaltyUntil(until);
     setBotCooldownSec(90);
   };
@@ -206,6 +220,7 @@ export default function Tasks() {
       if (remaining <= 0) {
         setBotCooldownSec(0);
         setBotPenaltyUntil(0);
+        try { localStorage.removeItem(BOT_PENALTY_KEY); } catch {}
         clearInterval(interval);
       } else {
         setBotCooldownSec(remaining);
