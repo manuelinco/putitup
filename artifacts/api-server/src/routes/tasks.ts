@@ -93,11 +93,12 @@ const BINARY_OPTIONS = ["Yes", "No"];
 function enrichTask(task: typeof tasksTable.$inferSelect) {
   const payload = (task.dataPayload ?? {}) as Record<string, unknown>;
 
-  let options: string[] | undefined =
-    Array.isArray(payload.options) ? (payload.options as string[]) : undefined;
-
-  if (!options && task.datasetId && DATASET_OPTIONS[task.datasetId]) {
+  // Always prefer DATASET_OPTIONS over stale dataPayload options from old admin-generated tasks
+  let options: string[] | undefined;
+  if (task.datasetId && DATASET_OPTIONS[task.datasetId]) {
     options = DATASET_OPTIONS[task.datasetId];
+  } else if (Array.isArray(payload.options)) {
+    options = payload.options as string[];
   }
 
   if (!options) {
@@ -156,13 +157,17 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
   const maxId = Number(maxRow.maxId);
   const pivotId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
 
-  // Filter out tasks with non-English questions (Italian legacy tasks have à è é ì ò ù)
+  // Only serve tasks from known/configured datasets (skip old Italian datasets like ds=9)
+  const knownDatasetIds = Object.keys(DATASET_OPTIONS).map(Number);
+  const knownDatasets = sql`${tasksTable.datasetId} = ANY(ARRAY[${sql.raw(knownDatasetIds.join(","))}]::int[])`;
+
+  // Also filter out tasks with non-English questions (Italian accented chars)
   const englishOnly = sql`(${tasksTable.dataPayload}->>'question') !~ '[àèéìòùÀÈÉÌÒÙáãâäåæçñøœ]'`;
 
   const baseFilter =
     answeredTaskIds.length > 0
-      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds), englishOnly)
-      : and(eq(tasksTable.status, "active"), englishOnly);
+      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds), knownDatasets, englishOnly)
+      : and(eq(tasksTable.status, "active"), knownDatasets, englishOnly);
 
   // Try from random pivot forward (index scan)
   let [task] = await db
