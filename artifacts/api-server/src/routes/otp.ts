@@ -10,7 +10,11 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const RATE_LIMIT_MS = 60 * 1000;
-const SESSION_SECRET = process.env["SESSION_SECRET"] ?? "putitup-session-secret";
+const SESSION_SECRET = (() => {
+  const s = process.env["SESSION_SECRET"];
+  if (!s) throw new Error("SESSION_SECRET env var is required");
+  return s;
+})();
 
 function generateOtp(): string {
   const n = parseInt(randomBytes(3).toString("hex"), 16) % 1000000;
@@ -43,7 +47,7 @@ function getIp(req: Request): string {
 router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void> => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    res.status(400).json({ error: "Email non valida" });
+    res.status(400).json({ error: "Invalid email address" });
     return;
   }
 
@@ -54,7 +58,7 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     .where(eq(clientsTable.email, email));
 
   if (existingClient) {
-    res.status(409).json({ error: "Questa email è già registrata. Accedi dalla pagina di login." });
+    res.status(409).json({ error: "This email is already registered. Please sign in." });
     return;
   }
 
@@ -71,7 +75,7 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     );
 
   if (recentOtps.length >= 3) {
-    res.status(429).json({ error: "Troppe richieste. Attendi 1 minuto prima di richiedere un nuovo codice." });
+    res.status(429).json({ error: "Too many requests. Wait 1 minute before requesting a new code." });
     return;
   }
 
@@ -90,15 +94,15 @@ router.post("/auth/otp/send", async (req: Request, res: Response): Promise<void>
     const result = await sendOtpEmail(email, code, true);
     if (result.devCode) devCode = result.devCode;
   } catch (err: any) {
-    res.status(500).json({ error: "Errore invio email. Riprova tra qualche istante." });
+    res.status(500).json({ error: "Email send error. Please try again shortly." });
     return;
   }
 
   res.json({
     ok: true,
     message: devCode
-      ? `[DEV] Email non inviata — codice: ${devCode}`
-      : `Codice inviato a ${email}`,
+      ? `[DEV] Email not sent — code: ${devCode}`
+      : `Code sent to ${email}`,
     ...(devCode ? { devCode } : {}),
   });
 });
@@ -108,7 +112,7 @@ router.post("/auth/otp/verify", async (req: Request, res: Response): Promise<voi
   const code = String(req.body?.code ?? "").trim();
 
   if (!email || !code) {
-    res.status(400).json({ error: "Email e codice sono obbligatori" });
+    res.status(400).json({ error: "Email and code are required" });
     return;
   }
 
@@ -149,14 +153,14 @@ router.post("/auth/otp/verify", async (req: Request, res: Response): Promise<voi
         .where(eq(clientOtpCodesTable.id, anyOtp.id));
 
       if (newAttempts >= MAX_ATTEMPTS) {
-        res.status(401).json({ error: "Troppi tentativi errati. Richiedi un nuovo codice." });
+        res.status(401).json({ error: "Too many failed attempts. Please request a new code." });
         return;
       }
-      res.status(401).json({ error: `Codice errato. ${MAX_ATTEMPTS - newAttempts} tentativi rimanenti.` });
+      res.status(401).json({ error: `Wrong code. ${MAX_ATTEMPTS - newAttempts} attempts remaining.` });
       return;
     }
 
-    res.status(401).json({ error: "Codice non valido o scaduto. Richiedi un nuovo codice." });
+    res.status(401).json({ error: "Invalid or expired code. Please request a new one." });
     return;
   }
 
@@ -173,7 +177,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
   } = req.body ?? {};
 
   if (!email || !firstName || !lastName) {
-    res.status(400).json({ error: "Nome, cognome ed email sono obbligatori" });
+    res.status(400).json({ error: "First name, last name and email are required" });
     return;
   }
 
@@ -193,7 +197,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
     .limit(1);
 
   if (!verifiedOtp.length) {
-    res.status(403).json({ error: "Sessione OTP scaduta. Ricomincia la registrazione." });
+    res.status(403).json({ error: "OTP session expired. Please restart registration." });
     return;
   }
 
@@ -203,7 +207,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
     .where(eq(clientsTable.email, normalizedEmail));
 
   if (existing) {
-    res.status(409).json({ error: "Account già esistente. Accedi dalla pagina di login." });
+    res.status(409).json({ error: "Account already exists. Please sign in." });
     return;
   }
 
@@ -223,7 +227,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
     .returning();
 
   if (!newClient) {
-    res.status(500).json({ error: "Errore creazione account" });
+    res.status(500).json({ error: "Account creation failed" });
     return;
   }
 
@@ -247,13 +251,13 @@ router.get("/auth/client/me", async (req: Request, res: Response): Promise<void>
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
   if (!token) {
-    res.status(401).json({ error: "Non autenticato" });
+    res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
   const clientId = verifySessionToken(token);
   if (!clientId) {
-    res.status(401).json({ error: "Token non valido" });
+    res.status(401).json({ error: "Invalid token" });
     return;
   }
 
@@ -270,7 +274,7 @@ router.get("/auth/client/me", async (req: Request, res: Response): Promise<void>
     .limit(1);
 
   if (!session) {
-    res.status(401).json({ error: "Sessione scaduta. Accedi di nuovo." });
+    res.status(401).json({ error: "Session expired. Please sign in again." });
     return;
   }
 

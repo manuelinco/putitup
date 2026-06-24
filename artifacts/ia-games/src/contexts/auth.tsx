@@ -261,7 +261,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
   const disconnectWallet = useCallback(() => tonConnectUI.disconnect(), [tonConnectUI]);
 
   const completeRegistration = useCallback(async (username: string) => {
-    if (!pendingWallet && !pendingTelegramId) throw new Error("Identità non disponibile");
+    if (!pendingWallet && !pendingTelegramId) throw new Error("Identity not available");
     const body: Record<string, unknown> = { username };
     if (pendingWallet) body.walletAddress = pendingWallet;
     if (pendingTelegramId) body.telegramId = pendingTelegramId;

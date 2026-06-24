@@ -42,12 +42,12 @@ export function LoginScreen({ telegramOnboarding = false }: { telegramOnboarding
             PUTITUP
           </h1>
           <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: "0 0 6px" }}>
-            {telegramOnboarding ? "Connetti il tuo TON Wallet" : "Human-in-the-Loop AI Data"}
+            {telegramOnboarding ? "Connect your TON Wallet" : "Human-in-the-Loop AI Data"}
           </p>
           <p style={{ fontSize: 13, color: "#888", margin: 0, lineHeight: 1.5 }}>
             {telegramOnboarding
-              ? "Collega il wallet per ricevere i tuoi guadagni in TON. Puoi saltare e aggiungerlo dopo."
-              : "Etichetta dati AI. Guadagna TON crypto. Alimenta il futuro dell'AI."}
+              ? "Link your wallet to receive TON earnings. You can skip and add it later."
+              : "Label AI data. Earn TON crypto. Power the future of AI."}
           </p>
         </div>
 
@@ -55,10 +55,10 @@ export function LoginScreen({ telegramOnboarding = false }: { telegramOnboarding
         {!telegramOnboarding && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[
-              { Icon: Trophy, label: "Classifica globale", color: "#facc15" },
-              { Icon: TrendingUp, label: "XP & Livelli", color: "#34d399" },
-              { Icon: Database, label: "Dataset validati", color: "#60a5fa" },
-              { Icon: Zap, label: "Ricompense TON", color: "#a78bfa" },
+              { Icon: Trophy, label: "Global leaderboard", color: "#facc15" },
+              { Icon: TrendingUp, label: "XP & Levels", color: "#34d399" },
+              { Icon: Database, label: "Validated datasets", color: "#60a5fa" },
+              { Icon: Zap, label: "TON rewards", color: "#a78bfa" },
             ].map(({ Icon, label, color }) => (
               <div key={label} style={{
                 background: "rgba(255,255,255,0.04)",
@@ -91,7 +91,7 @@ export function LoginScreen({ telegramOnboarding = false }: { telegramOnboarding
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#fff" }}>TON Wallet</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Ricevi 0,002 TON per ogni task completato</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#888" }}>Earn 0.002 TON per completed task</p>
             </div>
           </div>
         )}
@@ -110,7 +110,7 @@ export function LoginScreen({ telegramOnboarding = false }: { telegramOnboarding
             }}
           >
             <span style={{ fontSize: 20 }}>◆</span>
-            {telegramOnboarding ? "Connetti TON Wallet" : "Connect TON Wallet"}
+            Connect TON Wallet
           </button>
 
           {telegramOnboarding && (
@@ -122,14 +122,14 @@ export function LoginScreen({ telegramOnboarding = false }: { telegramOnboarding
                 textDecoration: "underline", textUnderlineOffset: 3,
               }}
             >
-              Salta, aggiungo il wallet dopo →
+              Skip, I'll add my wallet later →
             </button>
           )}
 
           <p style={{ fontSize: 11, textAlign: "center", color: "#555", margin: 0, lineHeight: 1.5 }}>
             {telegramOnboarding
-              ? "Il wallet non è obbligatorio per iniziare"
-              : "Apri in Telegram per il login automatico."}
+              ? "A wallet is not required to get started"
+              : "Open in Telegram for automatic login."}
           </p>
         </div>
 

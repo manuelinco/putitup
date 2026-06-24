@@ -120,7 +120,7 @@ export default function Tasks() {
   const handleSubmit = async () => {
     if (!selected || !task || submitted) return;
     if (!userId) {
-      setSubmitError("Connetti il wallet per inviare risposte.");
+      setSubmitError("Connect your wallet to submit answers.");
       return;
     }
     setSubmitError(null);
@@ -149,11 +149,11 @@ export default function Tasks() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("409") || msg.includes("already")) {
-        setSubmitError("Risposta già inviata per questo task.");
+        setSubmitError("Answer already submitted for this task.");
       } else if (msg.includes("energy") || msg.includes("400")) {
-        setSubmitError("Energia insufficiente — guarda un annuncio per ricaricare.");
+        setSubmitError("Not enough energy — watch an ad to recharge.");
       } else {
-        setSubmitError("Errore nell'invio — riprova.");
+        setSubmitError("Submission failed — please try again.");
       }
       notification("error");
       setShake(true);
@@ -468,12 +468,13 @@ export default function Tasks() {
               {/* Neutral result feedback — no correct/wrong reveal */}
               {submitted && result && (
                 <div className="text-center py-3 rounded-xl bg-accent/10 border border-accent/20 space-y-0.5">
-                  <p className="font-black text-sm text-accent">✓ Risposta registrata</p>
-                  <p className="text-[11px] text-muted-foreground">In attesa di revisione</p>
+                  <p className="font-black text-sm text-accent">✓ Answer recorded</p>
+                  <p className="text-[11px] text-muted-foreground">Pending review</p>
                   {result.points > 0 && (
                     <p className="text-[11px] font-black text-secondary mt-1">
                       +{result.points} pts · +{result.xp} XP · +{TON_PER_TASK} TON
                       {combo > 1 ? ` 🔥 Combo x${comboMultiplier}!` : ""}
+
                     </p>
                   )}
                 </div>

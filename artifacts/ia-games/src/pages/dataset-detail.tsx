@@ -62,7 +62,7 @@ export default function DatasetDetail() {
       });
       setClient(created);
       localStorage.setItem("ia_games_client_id", String(created.id));
-      setMessage("Profilo cliente salvato. Ora puoi sbloccare i dataset.");
+      setMessage("Client profile saved. You can now unlock datasets.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Registrazione fallita");
     } finally {
@@ -82,9 +82,9 @@ export default function DatasetDetail() {
       });
       setClient(result.client);
       setAdsWatched((p) => p + 1);
-      setMessage(`Ad completato: +${result.tokensEarned} token dataset.`);
+      setMessage(`Ad completed: +${result.tokensEarned} dataset tokens.`);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Ad non valido o cooldown anti-bot attivo");
+      setMessage(err instanceof Error ? err.message : "Invalid ad or anti-bot cooldown active");
     } finally {
       setBusy(false);
     }
@@ -104,7 +104,7 @@ export default function DatasetDetail() {
       }
       setDownloaded(true);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Download non autorizzato");
+      setMessage(err instanceof Error ? err.message : "Unauthorized download");
     } finally {
       setBusy(false);
     }
