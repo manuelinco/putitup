@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Shield, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import { API_BASE } from "@/lib/api";
+import { useAuth } from "@/contexts/auth";
 
 export default function AdminClaim() {
   const [, navigate] = useLocation();
+  const { refreshUser } = useAuth();
   const [form, setForm] = useState({ username: "", password: "" });
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,7 +28,9 @@ export default function AdminClaim() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `Error ${res.status}`);
       setSuccess(true);
-      setTimeout(() => navigate("/admin"), 2000);
+      // Refresh user in memory so isAdmin=true is active immediately
+      await refreshUser();
+      setTimeout(() => navigate("/admin"), 1500);
     } catch (e: any) {
       setError(e.message);
     }
