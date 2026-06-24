@@ -13,6 +13,10 @@ import {
   SubmitResponseBody,
   GetResponseParams,
 } from "@workspace/api-zod";
+import { generateVirtualTask } from "../lib/virtualTasks";
+
+const VIRTUAL_TASK_BASE = 10_000_000_000;
+const VIRTUAL_DATASET_SLOTS = 10_000_000; // datasetId * 10M + slot
 
 const XP_PER_TASK = 10;
 const XP_PER_LEVEL = 500;
@@ -82,10 +86,46 @@ router.post("/responses", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── Virtual task materialization ──────────────────────────────────────
+  // If taskId is synthetic (> VIRTUAL_TASK_BASE), reconstruct the virtual
+  // task content and insert a real DB row so consensus logic works normally.
+  let resolvedTaskId = taskId;
+  if (taskId > VIRTUAL_TASK_BASE) {
+    const offset    = taskId - VIRTUAL_TASK_BASE;
+    const datasetId = Math.floor(offset / VIRTUAL_DATASET_SLOTS);
+    const slot      = offset % VIRTUAL_DATASET_SLOTS;
+    const vtask     = generateVirtualTask(datasetId, slot);
+
+    // Upsert: check if already materialized
+    const [existing] = await db
+      .select({ id: tasksTable.id })
+      .from(tasksTable)
+      .where(eq(tasksTable.id, taskId));
+
+    if (!existing) {
+      await db.insert(tasksTable).values({
+        id:                 taskId,
+        type:               vtask.type,
+        dataPayload:        vtask.dataPayload as unknown as Record<string, unknown>,
+        correctAnswer:      vtask.correctAnswer,
+        difficulty:         vtask.difficulty,
+        pointsReward:       vtask.pointsReward,
+        isGolden:           vtask.isGolden,
+        datasetId:          vtask.datasetId,
+        requiredVotes:      vtask.requiredVotes,
+        consensusThreshold: vtask.consensusThreshold,
+        status:             "active",
+        reviewStage:        "labeling",
+        consensusCount:     0,
+      });
+    }
+    resolvedTaskId = taskId;
+  }
+
   const [task] = await db
     .select()
     .from(tasksTable)
-    .where(eq(tasksTable.id, taskId));
+    .where(eq(tasksTable.id, resolvedTaskId));
 
   if (!task) {
     res.status(404).json({ error: "Task not found" });

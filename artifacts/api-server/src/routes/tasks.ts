@@ -7,6 +7,11 @@ import {
   GetTaskParams,
   GetNextTaskQueryParams,
 } from "@workspace/api-zod";
+import {
+  generateVirtualTask,
+  VIRTUAL_DATASET_IDS,
+  VIRTUAL_SLOT_COUNT,
+} from "../lib/virtualTasks";
 
 const router: IRouter = Router();
 
@@ -171,7 +176,30 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
   }
 
   if (!task) {
-    res.status(404).json({ error: "No tasks available" });
+    // ── Virtual task fallback ──────────────────────────────────────────────
+    // Count how many virtual-task responses this user already has so we pick
+    // an unseen slot. We identify virtual responses by taskId > 1e10.
+    const [vcRow] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(taskResponsesTable)
+      .where(
+        and(
+          eq(taskResponsesTable.userId, userId),
+          sql`${taskResponsesTable.taskId} > 10000000000`,
+        ),
+      );
+    const virtualDoneCount = Number(vcRow?.n ?? 0);
+
+    // Pick a random dataset from the virtual set and a slot
+    const datasetId = VIRTUAL_DATASET_IDS[
+      Math.floor(Math.random() * VIRTUAL_DATASET_IDS.length)
+    ]!;
+    const slot = virtualDoneCount % VIRTUAL_SLOT_COUNT;
+
+    const vtask = generateVirtualTask(datasetId, slot);
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.set("Pragma", "no-cache");
+    res.json(vtask);
     return;
   }
 
