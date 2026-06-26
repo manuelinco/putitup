@@ -55,27 +55,27 @@ router.get("/tasks/stats", async (_req, res): Promise<void> => {
 
 const DATASET_OPTIONS: Record<number, string[]> = {
   // Text / NLP datasets
-  10: ["positive", "negative", "neutral"],
-  11: ["purchase", "browse", "return", "complaint", "inquiry"],
+  10: ["positive", "negative", "neutral", "Other"],
+  11: ["purchase", "browse", "return", "complaint", "inquiry", "Other"],
   13: ["Person", "Organization", "Location", "Date", "Product", "Other"],
-  14: ["Response A is better", "Response B is better", "Both are equally good", "Both are poor"],
-  15: ["Correct", "Minor errors", "Major errors", "Completely wrong"],
-  16: ["Cardiology", "Neurology", "Oncology", "Emergency", "General Practice", "Orthopedics"],
-  17: ["Complaint", "Question", "Return request", "Compliment", "Billing issue"],
-  18: ["Sincere", "Sarcastic", "Neutral", "Ambiguous"],
+  14: ["Response A is better", "Response B is better", "Both are equally good", "Both are poor", "Other"],
+  15: ["Correct", "Minor errors", "Major errors", "Completely wrong", "Other"],
+  16: ["Cardiology", "Neurology", "Oncology", "Emergency", "General Practice", "Orthopedics", "Other specialty"],
+  17: ["Complaint", "Question", "Return request", "Compliment", "Billing issue", "Other"],
+  18: ["Sincere", "Sarcastic", "Neutral", "Ambiguous", "Other"],
   // Image datasets — options cover ANY photo (no impossible answers)
   12: ["Person or people", "Animal or wildlife", "Vehicle or transport", "Building or architecture", "Nature or landscape", "Food or drink", "Electronics or technology", "Furniture or interior", "Other / Mixed"],
-  19: ["Excellent", "Good", "Fair", "Poor"],
+  19: ["Excellent", "Good", "Fair", "Poor", "Other"],
   20: ["Person or people", "Animal or wildlife", "Vehicle or transport", "Building or architecture", "Nature or landscape", "Food or drink", "Urban or street scene", "Abstract or texture", "Other"],
-  21: ["Happy or joyful", "Sad or upset", "Angry or frustrated", "Surprised or shocked", "Neutral or calm", "No person or face visible"],
-  22: ["Excellent — sharp, well-lit, professional", "Good — minor issues but usable", "Fair — noticeable blur or lighting problems", "Poor — very low quality or unusable"],
+  21: ["Happy or joyful", "Sad or upset", "Angry or frustrated", "Surprised or shocked", "Neutral or calm", "No person or face visible", "Other"],
+  22: ["Excellent — sharp, well-lit, professional", "Good — minor issues but usable", "Fair — noticeable blur or lighting problems", "Poor — very low quality or unusable", "Other / Cannot assess"],
   29: ["Urban or city environment", "Forest or woodland", "Countryside or farmland", "Coastal or water", "Desert or arid landscape", "Indoor or built interior", "Industrial or commercial site", "Other natural scene"],
   // Audio datasets
-  23: ["Correct", "Minor word errors", "Missing words", "Completely wrong"],
-  24: ["Correct", "Minor errors", "Missing content", "Incorrect"],
-  25: ["Correct", "Minor errors", "Missing content", "Incorrect"],
+  23: ["Correct", "Minor word errors", "Missing words", "Completely wrong", "Other / Cannot assess"],
+  24: ["Correct", "Minor errors", "Missing content", "Incorrect", "Other / Cannot assess"],
+  25: ["Correct", "Minor errors", "Missing content", "Incorrect", "Other / Cannot assess"],
   26: ["English", "Italian", "French", "Spanish", "German", "Portuguese", "Other"],
-  27: ["Happy", "Sad", "Angry", "Calm", "Excited", "Fearful", "Neutral"],
+  27: ["Happy", "Sad", "Angry", "Calm", "Excited", "Fearful", "Neutral", "Other"],
   // Video
   28: ["Running", "Cooking", "Driving", "Playing sports", "Working", "Dancing", "Reading", "Other"],
 };
@@ -164,10 +164,13 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
   // Also filter out tasks with non-English questions (Italian accented chars)
   const englishOnly = sql`(${tasksTable.dataPayload}->>'question') !~ '[àèéìòùÀÈÉÌÒÙáãâäåæçñøœ]'`;
 
+  // Exclude tasks pending relabeling by a supervisor
+  const notPendingRelabel = eq(tasksTable.needsRelabeling, false);
+
   const baseFilter =
     answeredTaskIds.length > 0
-      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds), knownDatasets, englishOnly)
-      : and(eq(tasksTable.status, "active"), knownDatasets, englishOnly);
+      ? and(eq(tasksTable.status, "active"), notInArray(tasksTable.id, answeredTaskIds), knownDatasets, englishOnly, notPendingRelabel)
+      : and(eq(tasksTable.status, "active"), knownDatasets, englishOnly, notPendingRelabel);
 
   // Try from random pivot forward (index scan)
   let [task] = await db
@@ -373,6 +376,63 @@ router.patch("/tasks/:id/admin-approve", async (req, res): Promise<void> => {
 
   const [approver] = await db.select().from(usersTable).where(eq(usersTable.id, adminId));
   res.json({ task, rewardsReleased: correctResponses.length + (task.supervisorId ? 1 : 0), approvedBy: approver?.username ?? null });
+});
+
+// ── Relabeling Basket ─────────────────────────────────────────────────────────
+// Lists tasks where consensus landed on "Other" / vague answer.
+// Supervisors inject custom labels so the task re-enters the labeling queue.
+
+router.get("/tasks/relabel-basket", async (_req, res): Promise<void> => {
+  const tasks = await db
+    .select()
+    .from(tasksTable)
+    .where(eq(tasksTable.needsRelabeling, true))
+    .orderBy(desc(tasksTable.consensusCount))
+    .limit(100);
+  res.json(tasks);
+});
+
+router.post("/tasks/:id/relabel", async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid task ID" });
+    return;
+  }
+
+  const { newOptions, notes } = req.body ?? {};
+  if (!Array.isArray(newOptions) || newOptions.length < 2) {
+    res.status(400).json({ error: "newOptions must be an array of at least 2 strings" });
+    return;
+  }
+
+  const [existing] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
+
+  const updatedPayload = { ...(existing.dataPayload as Record<string, unknown>), options: newOptions };
+
+  const [updated] = await db
+    .update(tasksTable)
+    .set({
+      dataPayload: updatedPayload,
+      needsRelabeling: false,
+      relabelOptions: newOptions,
+      consensusCount: 0,
+      finalLabel: null,
+      reviewStage: "labeling",
+      status: "active",
+      rawSource: notes ?? existing.rawSource,
+    })
+    .where(eq(tasksTable.id, id))
+    .returning();
+
+  // Delete old responses so labelers can vote fresh with the new options
+  await db.delete(taskResponsesTable).where(eq(taskResponsesTable.taskId, id));
+
+  res.json({ task: updated, responsesDeleted: true });
 });
 
 router.get("/tasks/:id", async (req, res): Promise<void> => {

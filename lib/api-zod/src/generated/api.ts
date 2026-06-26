@@ -199,6 +199,40 @@ export const CreateTaskBody = zod.object({
 });
 
 /**
+ * @summary List tasks pending relabeling (Other consensus)
+ */
+export const GetRelabelBasketResponseItem = zod.object({
+  id: zod.number(),
+  type: zod.enum(["image", "text", "classification"]),
+  dataPayload: zod
+    .object({})
+    .passthrough()
+    .describe("Task content (image URL, text, or options)"),
+  correctAnswer: zod.string().nullish(),
+  difficulty: zod.enum(["easy", "medium", "hard"]),
+  pointsReward: zod.number(),
+  isGolden: zod.boolean().describe("Golden dataset task with known answer"),
+  consensusCount: zod.number().describe("How many responses collected so far"),
+  finalLabel: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const GetRelabelBasketResponse = zod.array(GetRelabelBasketResponseItem);
+
+/**
+ * @summary Supervisor injects new labels and resets the task for re-labeling
+ */
+export const RelabelTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const relabelTaskBodyNewOptionsMin = 2;
+
+export const RelabelTaskBody = zod.object({
+  newOptions: zod.array(zod.string()).min(relabelTaskBodyNewOptionsMin),
+  notes: zod.string().optional(),
+});
+
+/**
  * @summary Get a task by ID
  */
 export const GetTaskParams = zod.object({

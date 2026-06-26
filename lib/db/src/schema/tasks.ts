@@ -47,6 +47,8 @@ export const tasksTable = pgTable("tasks", {
   supervisorRewardTon: real("supervisor_reward_ton").notNull().default(0.0001),
   rewardReleased: boolean("reward_released").notNull().default(false),
   rawSource: text("raw_source"),
+  needsRelabeling: boolean("needs_relabeling").notNull().default(false),
+  relabelOptions: json("relabel_options").$type<string[]>(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

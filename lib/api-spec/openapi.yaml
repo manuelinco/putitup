@@ -227,6 +227,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/Task"
 
+  /tasks/relabel-basket:
+    get:
+      operationId: getRelabelBasket
+      tags: [tasks]
+      summary: List tasks pending relabeling (Other consensus)
+      responses:
+        "200":
+          description: Tasks needing supervisor relabeling
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
+  /tasks/{id}/relabel:
+    post:
+      operationId: relabelTask
+      tags: [tasks]
+      summary: Supervisor injects new labels and resets the task for re-labeling
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RelabelTaskBody"
+      responses:
+        "200":
+          description: Task reset with new options
+        "400":
+          description: Invalid input
+        "404":
+          description: Task not found
+
   /tasks/{id}:
     get:
       operationId: getTask
@@ -729,6 +769,18 @@ components:
         avatarUrl:
           type: ["string", "null"]
       required: [telegramId, username]
+
+    RelabelTaskBody:
+      type: object
+      required: [newOptions]
+      properties:
+        newOptions:
+          type: array
+          items:
+            type: string
+          minItems: 2
+        notes:
+          type: string
 
     UpdateUserBody:
       type: object

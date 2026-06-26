@@ -181,37 +181,54 @@ router.post("/responses", async (req, res): Promise<void> => {
   };
 
   if (consensusReached && task.reviewStage === "labeling") {
-    let nextStatus = "pending_admin";
-    let nextStage = "admin_review";
-    let approvedAt: Date | null = null;
-    let adminApprovedAt: Date | null = null;
+    const winningAnswer = topAnswer?.[0] ?? answer;
 
-    if (task.datasetId) {
-      const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, task.datasetId));
-      if (dataset?.workflowMode === "consensus") {
+    // If consensus landed on "Other" / vague answer → send to relabeling basket
+    // A supervisor will inject specific labels so the task can be re-labeled properly
+    const isOtherConsensus = winningAnswer.trim().toLowerCase().startsWith("other") ||
+      winningAnswer.trim().toLowerCase().includes("cannot assess");
+
+    if (isOtherConsensus) {
+      consensusUpdate = {
+        ...consensusUpdate,
+        finalLabel: winningAnswer,
+        needsRelabeling: true,
+        reviewStage: "relabel_queue",
+        status: "relabel_queue",
+      };
+    } else {
+      let nextStatus = "pending_admin";
+      let nextStage = "admin_review";
+      let approvedAt: Date | null = null;
+      let adminApprovedAt: Date | null = null;
+
+      if (task.datasetId) {
+        const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, task.datasetId));
+        if (dataset?.workflowMode === "consensus") {
+          nextStatus = "approved";
+          nextStage = "published";
+          approvedAt = new Date();
+          adminApprovedAt = approvedAt;
+        } else if (dataset?.workflowMode === "supervisor_admin" || task.supervisorId) {
+          nextStatus = "pending_supervisor";
+          nextStage = "supervisor_review";
+        }
+      } else if (!task.supervisorId) {
         nextStatus = "approved";
         nextStage = "published";
         approvedAt = new Date();
         adminApprovedAt = approvedAt;
-      } else if (dataset?.workflowMode === "supervisor_admin" || task.supervisorId) {
-        nextStatus = "pending_supervisor";
-        nextStage = "supervisor_review";
       }
-    } else if (!task.supervisorId) {
-      nextStatus = "approved";
-      nextStage = "published";
-      approvedAt = new Date();
-      adminApprovedAt = approvedAt;
-    }
 
-    consensusUpdate = {
-      ...consensusUpdate,
-      finalLabel: topAnswer?.[0] ?? answer,
-      status: nextStatus,
-      reviewStage: nextStage,
-      approvedAt,
-      adminApprovedAt,
-    };
+      consensusUpdate = {
+        ...consensusUpdate,
+        finalLabel: winningAnswer,
+        status: nextStatus,
+        reviewStage: nextStage,
+        approvedAt,
+        adminApprovedAt,
+      };
+    }
   }
 
   const newStreak = user.streak + 1;

@@ -39,6 +39,7 @@ import type {
   ListTasksParams,
   ListUsersParams,
   RechargeEnergyBody,
+  RelabelTaskBody,
   SubmitResponseBody,
   SubmitResponseResult,
   Task,
@@ -834,6 +835,168 @@ export const useCreateTask = <
   TContext
 > => {
   return useMutation(getCreateTaskMutationOptions(options));
+};
+
+/**
+ * @summary List tasks pending relabeling (Other consensus)
+ */
+export const getGetRelabelBasketUrl = () => {
+  return `/api/tasks/relabel-basket`;
+};
+
+export const getRelabelBasket = async (
+  options?: RequestInit,
+): Promise<Task[]> => {
+  return customFetch<Task[]>(getGetRelabelBasketUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetRelabelBasketQueryKey = () => {
+  return [`/api/tasks/relabel-basket`] as const;
+};
+
+export const getGetRelabelBasketQueryOptions = <
+  TData = Awaited<ReturnType<typeof getRelabelBasket>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getRelabelBasket>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetRelabelBasketQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getRelabelBasket>>
+  > = ({ signal }) => getRelabelBasket({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getRelabelBasket>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetRelabelBasketQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getRelabelBasket>>
+>;
+export type GetRelabelBasketQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List tasks pending relabeling (Other consensus)
+ */
+
+export function useGetRelabelBasket<
+  TData = Awaited<ReturnType<typeof getRelabelBasket>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getRelabelBasket>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetRelabelBasketQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Supervisor injects new labels and resets the task for re-labeling
+ */
+export const getRelabelTaskUrl = (id: number) => {
+  return `/api/tasks/${id}/relabel`;
+};
+
+export const relabelTask = async (
+  id: number,
+  relabelTaskBody: RelabelTaskBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRelabelTaskUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(relabelTaskBody),
+  });
+};
+
+export const getRelabelTaskMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof relabelTask>>,
+    TError,
+    { id: number; data: BodyType<RelabelTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof relabelTask>>,
+  TError,
+  { id: number; data: BodyType<RelabelTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["relabelTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof relabelTask>>,
+    { id: number; data: BodyType<RelabelTaskBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return relabelTask(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RelabelTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof relabelTask>>
+>;
+export type RelabelTaskMutationBody = BodyType<RelabelTaskBody>;
+export type RelabelTaskMutationError = ErrorType<void>;
+
+/**
+ * @summary Supervisor injects new labels and resets the task for re-labeling
+ */
+export const useRelabelTask = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof relabelTask>>,
+    TError,
+    { id: number; data: BodyType<RelabelTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof relabelTask>>,
+  TError,
+  { id: number; data: BodyType<RelabelTaskBody> },
+  TContext
+> => {
+  return useMutation(getRelabelTaskMutationOptions(options));
 };
 
 /**
