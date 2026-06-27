@@ -184,7 +184,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [image, text, classification]
+            enum: [image, text, classification, audio, video]
         - name: difficulty
           in: query
           schema:
@@ -836,7 +836,7 @@ components:
           type: integer
         type:
           type: string
-          enum: [image, text, classification]
+          enum: [image, text, classification, audio, video]
         dataPayload:
           type: object
           description: Task content (image URL, text, or options)
@@ -865,7 +865,7 @@ components:
       properties:
         type:
           type: string
-          enum: [image, text, classification]
+          enum: [image, text, classification, audio, video]
         dataPayload:
           type: object
         correctAnswer:

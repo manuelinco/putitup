@@ -16,6 +16,8 @@ export const taskTypeEnum = pgEnum("task_type", [
   "image",
   "text",
   "classification",
+  "audio",
+  "video",
 ]);
 export const taskDifficultyEnum = pgEnum("task_difficulty", [
   "easy",

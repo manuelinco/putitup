@@ -24,6 +24,8 @@ const typeLabels: Record<string, string> = {
   image:          "IMAGE",
   text:           "TEXT",
   classification: "CLASSIFICATION",
+  audio:          "AUDIO",
+  video:          "VIDEO",
 };
 
 const TON_PER_TASK = 0.00004;
@@ -407,8 +409,27 @@ export default function Tasks() {
                 </div>
               )}
 
-              {/* Audio player — Web Speech API reads the transcript */}
-              {(!!payload?.audioUrl || !!payload?.transcript) && (
+              {/* Video player — native <video> for video tasks */}
+              {task.type === "video" && !!payload?.videoUrl && (
+                <div className="rounded-xl overflow-hidden border border-purple-500/40 bg-black">
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-purple-500/10 border-b border-purple-500/20">
+                    <p className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">🎬 Video Clip</p>
+                    <span className="text-[9px] text-muted-foreground">Watch before answering</span>
+                  </div>
+                  <video
+                    controls
+                    preload="metadata"
+                    className="w-full max-h-44 object-contain bg-black"
+                    src={String(payload.videoUrl)}
+                    poster={payload.thumbnail ? String(payload.thumbnail) : undefined}
+                  >
+                    Your browser does not support video.
+                  </video>
+                </div>
+              )}
+
+              {/* Audio player — native <audio> for audio tasks */}
+              {task.type === "audio" && !!payload?.audioUrl && (
                 <div className="rounded-xl border border-accent/30 bg-accent/5 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] uppercase font-bold text-accent tracking-wider">🎙 Audio Clip</p>
@@ -418,11 +439,32 @@ export default function Tasks() {
                       </span>
                     )}
                   </div>
-                  {!!payload?.transcript && (
-                    <p className="text-[11px] text-muted-foreground italic leading-relaxed line-clamp-2">
-                      "{String(payload.transcript)}"
-                    </p>
-                  )}
+                  <audio
+                    controls
+                    preload="metadata"
+                    className="w-full h-10"
+                    src={String(payload.audioUrl)}
+                  >
+                    Your browser does not support audio.
+                  </audio>
+                  <p className="text-[9px] text-muted-foreground text-center">Listen carefully, then select your answer</p>
+                </div>
+              )}
+
+              {/* Web Speech fallback — classification tasks with transcript only */}
+              {task.type === "classification" && (!!payload?.transcript) && (
+                <div className="rounded-xl border border-accent/30 bg-accent/5 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase font-bold text-accent tracking-wider">🎙 Audio Sample</p>
+                    {!!payload?.language && (
+                      <span className="text-[9px] font-mono bg-muted/50 px-1.5 py-0.5 rounded uppercase">
+                        {String(payload.language)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground italic leading-relaxed line-clamp-2">
+                    "{String(payload.transcript)}"
+                  </p>
                   <Button
                     size="sm"
                     variant="outline"
@@ -433,12 +475,12 @@ export default function Tasks() {
                         : "border-accent/30 text-accent/80 hover:bg-accent/10"
                     )}
                     onClick={() => speakTranscript(
-                      String(payload?.transcript ?? payload?.audioUrl ?? ""),
+                      String(payload?.transcript ?? ""),
                       String(payload?.language ?? "EN")
                     )}
                   >
                     {isSpeaking
-                      ? <><VolumeX className="w-3.5 h-3.5" /> Stop Audio</>
+                      ? <><VolumeX className="w-3.5 h-3.5" /> Stop</>
                       : <><Volume2 className="w-3.5 h-3.5" /> Play Audio</>
                     }
                   </Button>
