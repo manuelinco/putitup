@@ -40,7 +40,7 @@ lib/
 - Set webhook: `POST /api/telegram/set-webhook` with `{ webhookUrl }` body
 - Get webhook info: `GET /api/telegram/webhook-info`
 - Set menu button: `POST /api/telegram/set-menu-button` with `{ appUrl }` body
-- Bot: @Putituo_bot — TELEGRAM_BOT_TOKEN set as secret
+- Bot: @Putitup_bot — TELEGRAM_BOT_TOKEN set as secret. Webhook LIVE on Render; bot copy in English; menu button "🎮 Play"; commands /start /balance /leaderboard /info
 
 ## Mini App (ia-games) — Key Features
 
@@ -127,6 +127,5 @@ lib/
 
 ## Blocked / Future
 
-- Telegram Bot webhook (needs BOT_TOKEN from user)
-- Stripe payment activation (scaffolded only)
-- Auth backend activation (login/register UI ready, backend not wired)
+- Stripe LIVE mode — currently TEST mode (fully functional with test cards). Go-live needs: verified Stripe account, live STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET on Render, live products seeded, PUBLIC_URL set on Render for webhook
+- AUTH_ENFORCE=strict on Render (flip after confirming real users get tokens via Mini App)

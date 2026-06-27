@@ -23,14 +23,14 @@ function appUrl(path: string) {
 
 const INFO_TEXT = `⚡ *PUTITUP* — AI Data Platform
 
-Etichetta dati AI e guadagna vero crypto TON per ogni task completato.
+Label AI data and earn real TON crypto for every task you complete.
 
-🎮 *Gioca e Guadagna* — Completa task di labeling e accumula TON
-💰 *Il mio Saldo* — Controlla i tuoi TON e richiedi il pagamento  
-🏆 *Classifica* — Scala la leaderboard e vinci premi settimanali
-👥 *Referral* — Invita amici e guadagna +500 punti bonus
+🎮 *Play & Earn* — Complete labeling tasks and stack up TON
+💰 *My Balance* — Check your TON and request a payout
+🏆 *Leaderboard* — Climb the rankings and win weekly prizes
+👥 *Referral* — Invite friends and earn +500 bonus points
 
-Ogni task vale *0.00004 TON* · Pagamento diretto al tuo wallet`;
+Every task is worth *0.00004 TON* · Paid directly to your wallet`;
 
 router.post("/telegram/webhook", async (req, res): Promise<void> => {
   const update = req.body;
@@ -42,26 +42,26 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
 
     if (message?.text === "/start" || message?.text?.startsWith("/start ")) {
       const chatId = message.chat.id;
-      const firstName = message.from?.first_name ?? "amico";
+      const firstName = message.from?.first_name ?? "friend";
       const referralCode = message.text.split(" ")[1] ?? null;
 
       const playUrl = referralCode ? `${appUrl("/")}?ref=${referralCode}` : appUrl("/");
 
       await sendTelegramRequest("sendMessage", {
         chat_id: chatId,
-        text: `👋 Ciao ${firstName}! Benvenuto su *PUTITUP*\n\n🤖 Etichetta dati AI e guadagna vero crypto TON.\n\n🔥 Ogni task completato vale *0.00004 TON*\n🏆 I migliori salgono in classifica e vincono premi\n👥 Invita amici e ottieni *+500 punti* per ogni referral\n\n👇 Scegli cosa vuoi fare:`,
+        text: `👋 Hi ${firstName}! Welcome to *PUTITUP*\n\n🤖 Label AI data and earn real TON crypto.\n\n🔥 Every completed task is worth *0.00004 TON*\n🏆 Top contributors climb the leaderboard and win prizes\n👥 Invite friends and get *+500 points* per referral\n\n👇 Choose what you want to do:`,
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
             [
-              { text: "🎮 Gioca e Guadagna", web_app: { url: playUrl } },
+              { text: "🎮 Play & Earn", web_app: { url: playUrl } },
             ],
             [
-              { text: "💰 Il mio Saldo", web_app: { url: appUrl("/profile/me") } },
-              { text: "🏆 Classifica", web_app: { url: appUrl("/leaderboard") } },
+              { text: "💰 My Balance", web_app: { url: appUrl("/profile/me") } },
+              { text: "🏆 Leaderboard", web_app: { url: appUrl("/leaderboard") } },
             ],
             [
-              { text: "ℹ️ Come funziona", callback_data: "info" },
+              { text: "ℹ️ How it works", callback_data: "info" },
             ],
           ]
         }
@@ -69,30 +69,32 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
       return;
     }
 
-    if (message?.text === "/saldo") {
+    // /balance (new) — /saldo kept for backward compatibility during rollout
+    if (message?.text === "/balance" || message?.text === "/saldo") {
       const chatId = message.chat.id;
       await sendTelegramRequest("sendMessage", {
         chat_id: chatId,
-        text: `💰 *Il tuo saldo PUTITUP*\n\nApri la mini app per vedere i tuoi TON accumulati, richiedere il pagamento e controllare lo storico ricompense.`,
+        text: `💰 *Your PUTITUP balance*\n\nOpen the mini app to see your accumulated TON, request a payout and check your reward history.`,
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [[
-            { text: "💰 Apri Saldo", web_app: { url: appUrl("/profile/me") } },
+            { text: "💰 Open Balance", web_app: { url: appUrl("/profile/me") } },
           ]]
         }
       });
       return;
     }
 
-    if (message?.text === "/classifica") {
+    // /leaderboard (new) — /classifica kept for backward compatibility during rollout
+    if (message?.text === "/leaderboard" || message?.text === "/classifica") {
       const chatId = message.chat.id;
       await sendTelegramRequest("sendMessage", {
         chat_id: chatId,
-        text: `🏆 *Classifica PUTITUP*\n\nVedi chi sono i migliori contributor della settimana. Scala la classifica per vincere premi extra!`,
+        text: `🏆 *PUTITUP Leaderboard*\n\nSee who the top contributors of the week are. Climb the leaderboard to win extra prizes!`,
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [[
-            { text: "🏆 Apri Classifica", web_app: { url: appUrl("/leaderboard") } },
+            { text: "🏆 Open Leaderboard", web_app: { url: appUrl("/leaderboard") } },
           ]]
         }
       });
@@ -107,7 +109,7 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [[
-            { text: "🎮 Inizia a guadagnare", web_app: { url: appUrl("/") } },
+            { text: "🎮 Start earning", web_app: { url: appUrl("/") } },
           ]]
         }
       });
@@ -127,7 +129,7 @@ router.post("/telegram/webhook", async (req, res): Promise<void> => {
           parse_mode: "Markdown",
           reply_markup: {
             inline_keyboard: [[
-              { text: "🎮 Inizia a guadagnare", web_app: { url: appUrl("/") } },
+              { text: "🎮 Start earning", web_app: { url: appUrl("/") } },
             ]]
           }
         });
@@ -164,10 +166,10 @@ router.post("/telegram/set-commands", async (_req, res): Promise<void> => {
   }
   const result = await sendTelegramRequest("setMyCommands", {
     commands: [
-      { command: "start", description: "🚀 Avvia PUTITUP" },
-      { command: "saldo", description: "💰 Vedi il tuo saldo TON" },
-      { command: "classifica", description: "🏆 Apri la classifica" },
-      { command: "info", description: "ℹ️ Come funziona PUTITUP" },
+      { command: "start", description: "🚀 Start PUTITUP" },
+      { command: "balance", description: "💰 Check your TON balance" },
+      { command: "leaderboard", description: "🏆 Open the leaderboard" },
+      { command: "info", description: "ℹ️ How PUTITUP works" },
     ]
   });
   res.json(result);
@@ -193,7 +195,7 @@ router.post("/telegram/set-menu-button", async (req, res): Promise<void> => {
   const result = await sendTelegramRequest("setChatMenuButton", {
     menu_button: {
       type: "web_app",
-      text: "🎮 Gioca",
+      text: "🎮 Play",
       web_app: { url },
     },
   });
