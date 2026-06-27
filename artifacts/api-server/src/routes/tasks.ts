@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, notInArray, desc, gte, lt, sql } from "drizzle-orm";
 import { db, tasksTable, taskResponsesTable, rewardLedgerTable, usersTable } from "@workspace/db";
+import { sendTonPayout } from "../lib/ton-payout";
 import {
   ListTasksQueryParams,
   CreateTaskBody,
@@ -348,34 +349,55 @@ router.patch("/tasks/:id/admin-approve", async (req, res): Promise<void> => {
   const responses = await db.select().from(taskResponsesTable).where(eq(taskResponsesTable.taskId, id));
   const correctResponses = responses.filter((response) => response.answer === task.finalLabel || response.isCorrect === true);
 
+  const payoutResults: { userId: number; result: Awaited<ReturnType<typeof sendTonPayout>> }[] = [];
+
   for (const response of correctResponses) {
+    // Fetch wallet address for on-chain payout
+    const [respUser] = await db.select({ walletAddress: usersTable.walletAddress }).from(usersTable).where(eq(usersTable.id, response.userId));
+    const tonResult = respUser?.walletAddress
+      ? await sendTonPayout(respUser.walletAddress, Number(task.operatorRewardTon ?? 0), `PUTITUP task #${task.id}`)
+      : { success: false, dryRun: true, error: "no wallet" };
+    payoutResults.push({ userId: response.userId, result: tonResult });
+
+    const ledgerStatus = tonResult.success ? "paid" : "approved";
     await db.insert(rewardLedgerTable).values({
       userId: response.userId,
       taskId: task.id,
       role: "operator",
       amountTon: task.operatorRewardTon,
       pointsValue: task.taskValuePoints,
-      status: "approved",
+      status: ledgerStatus,
     });
     await db.update(taskResponsesTable).set({
       rewardTon: task.operatorRewardTon,
-      rewardStatus: "approved",
+      rewardStatus: ledgerStatus,
     }).where(eq(taskResponsesTable.id, response.id));
   }
 
   if (task.supervisorId) {
+    const [svUser] = await db.select({ walletAddress: usersTable.walletAddress }).from(usersTable).where(eq(usersTable.id, task.supervisorId));
+    const svResult = svUser?.walletAddress
+      ? await sendTonPayout(svUser.walletAddress, Number(task.supervisorRewardTon ?? 0), `PUTITUP supervisor #${task.id}`)
+      : { success: false, dryRun: true };
+    payoutResults.push({ userId: task.supervisorId, result: svResult });
+
     await db.insert(rewardLedgerTable).values({
       userId: task.supervisorId,
       taskId: task.id,
       role: "supervisor",
       amountTon: task.supervisorRewardTon,
       pointsValue: task.taskValuePoints,
-      status: "approved",
+      status: svResult.success ? "paid" : "approved",
     });
   }
 
   const [approver] = await db.select().from(usersTable).where(eq(usersTable.id, adminId));
-  res.json({ task, rewardsReleased: correctResponses.length + (task.supervisorId ? 1 : 0), approvedBy: approver?.username ?? null });
+  res.json({
+    task,
+    rewardsReleased: correctResponses.length + (task.supervisorId ? 1 : 0),
+    approvedBy: approver?.username ?? null,
+    payouts: payoutResults.map(({ userId, result }) => ({ userId, ...result })),
+  });
 });
 
 // ── Relabeling Basket ─────────────────────────────────────────────────────────
