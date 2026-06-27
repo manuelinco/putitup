@@ -38,7 +38,6 @@ export const usersTable = pgTable("users", {
   referredBy: integer("referred_by"),
   referralCount: integer("referral_count").notNull().default(0),
   referralBonusEarned: integer("referral_bonus_earned").notNull().default(0),
-  energyUpdatedAt: timestamp("energy_updated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

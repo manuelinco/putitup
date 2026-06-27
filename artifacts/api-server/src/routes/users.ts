@@ -17,13 +17,13 @@ const REGEN_INTERVAL_MS = 30 * 60 * 1000;
 async function applyPassiveEnergyRegen(user: typeof usersTable.$inferSelect): Promise<number> {
   if (user.energy >= user.maxEnergy) return user.energy;
   const now = Date.now();
-  const lastUpdate = user.energyUpdatedAt?.getTime() ?? user.createdAt.getTime();
+  const lastUpdate = user.createdAt.getTime();
   const elapsed = now - lastUpdate;
   const gained = Math.floor(elapsed / REGEN_INTERVAL_MS) * ENERGY_REGEN_PER_30MIN;
   if (gained <= 0) return user.energy;
   const newEnergy = Math.min(user.energy + gained, user.maxEnergy);
   await db.update(usersTable)
-    .set({ energy: newEnergy, energyUpdatedAt: new Date() })
+    .set({ energy: newEnergy })
     .where(eq(usersTable.id, user.id));
   return newEnergy;
 }
