@@ -48,18 +48,41 @@ const methodLabel: Record<string, string> = {
 type Tab = "dataset" | "profilo" | "piano" | "admin";
 
 export default function Dashboard() {
-  const { client, logout } = useBusinessAuth();
+  const { client, logout, refresh } = useBusinessAuth();
   const [, navigate] = useLocation();
   const [unlocked, setUnlocked] = useState<UnlockedDataset[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [tab, setTab] = useState<Tab>("dataset");
 
-  const plan = typeof window !== "undefined"
-    ? (localStorage.getItem("pb_client_plan") ?? "free")
-    : "free";
+  const plan = (client?.plan as string | undefined)
+    ?? (typeof window !== "undefined" ? localStorage.getItem("pb_client_plan") ?? "free" : "free");
   const isAdmin = typeof window !== "undefined"
     ? localStorage.getItem("pb_is_admin") === "true"
     : false;
+
+  // After returning from Stripe Checkout, confirm the payment so the plan is granted.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") !== "success") return;
+    const sessionId = params.get("session_id");
+    const token = localStorage.getItem("pb_session_token") ?? "";
+    const clean = () => window.history.replaceState({}, "", window.location.pathname);
+
+    if (sessionId && token) {
+      fetch(`${API_BASE}/api/stripe/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId }),
+      })
+        .then((r) => r.json())
+        .then((d) => { if (d?.plan) localStorage.setItem("pb_client_plan", d.plan); })
+        .catch(() => {})
+        .finally(() => { refresh(); window.dispatchEvent(new Event("storage")); clean(); });
+    } else {
+      clean();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!client) { navigate("/login"); return; }

@@ -1,8 +1,16 @@
 import { Router, type IRouter } from "express";
 import { getUncachableStripeClient } from "../lib/stripeClient";
 import { stripeStorage } from "../lib/stripeStorage";
+import { authenticateClient } from "../lib/clientAuth";
+import { applyCheckoutSession } from "../lib/stripePlanSync";
 
 const router: IRouter = Router();
+
+function baseUrl(): string {
+  return process.env.REPLIT_DOMAINS
+    ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
+    : "https://putitupbusiness.it";
+}
 
 // List all active products with their prices (for pricing page)
 router.get("/stripe/products", async (_req, res): Promise<void> => {
@@ -35,47 +43,45 @@ router.get("/stripe/products", async (_req, res): Promise<void> => {
   }
 });
 
-// Create Stripe Checkout session for a plan
-// Body: { email, clientId, priceId, successUrl, cancelUrl }
+// Create a Stripe Checkout session for a plan. Requires an authenticated client;
+// the customer is derived from the session token (never from the request body)
+// so a user can only start checkout for their own account.
+// Body: { priceId }
 router.post("/stripe/checkout", async (req, res): Promise<void> => {
-  const { email, clientId, priceId, successUrl, cancelUrl } = req.body ?? {};
+  const auth = await authenticateClient(req);
+  if (!auth) {
+    res.status(401).json({ error: "Please sign in to subscribe" });
+    return;
+  }
 
-  if (!email || !priceId) {
-    res.status(400).json({ error: "email and priceId are required" });
+  const { priceId } = req.body ?? {};
+  if (!priceId) {
+    res.status(400).json({ error: "priceId is required" });
     return;
   }
 
   try {
     const stripe = await getUncachableStripeClient();
+    const email = auth.client.email as string;
 
-    // Reuse or create Stripe customer
-    let stripeCustomerId: string | null = null;
-    if (clientId) {
-      const client = await stripeStorage.getClientByEmail(email);
-      if (client?.stripeCustomerId) {
-        stripeCustomerId = client.stripeCustomerId;
-      }
-    }
-
+    let stripeCustomerId = (auth.client.stripeCustomerId as string | null) ?? null;
     if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({ email });
+      const customer = await stripe.customers.create({
+        email,
+        metadata: { clientId: String(auth.clientId) },
+      });
       stripeCustomerId = customer.id;
-      if (clientId) {
-        await stripeStorage.updateClientStripe(Number(clientId), { stripeCustomerId });
-      }
+      await stripeStorage.updateClientStripe(auth.clientId, { stripeCustomerId });
     }
-
-    const baseUrl = process.env.REPLIT_DOMAINS
-      ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}`
-      : "https://putitupbusiness.it";
 
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: successUrl ?? `${baseUrl}/putitup-business/dashboard?checkout=success`,
-      cancel_url: cancelUrl ?? `${baseUrl}/putitup-business/pricing?checkout=cancelled`,
+      client_reference_id: String(auth.clientId),
+      success_url: `${baseUrl()}/putitup-business/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl()}/putitup-business/pricing?checkout=cancelled`,
       allow_promotion_codes: true,
       billing_address_collection: "auto",
     });
@@ -87,23 +93,49 @@ router.post("/stripe/checkout", async (req, res): Promise<void> => {
   }
 });
 
-// Customer portal — manage subscription / billing
-// Body: { email }
+// Confirm a completed checkout on return and grant the paid plan.
+// Body: { sessionId }
+router.post("/stripe/confirm", async (req, res): Promise<void> => {
+  const auth = await authenticateClient(req);
+  if (!auth) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+
+  const { sessionId } = req.body ?? {};
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required" });
+    return;
+  }
+
+  try {
+    const expectedCustomerId = (auth.client.stripeCustomerId as string | null) ?? null;
+    const result = await applyCheckoutSession(auth.clientId, String(sessionId), expectedCustomerId);
+    res.json({ ok: true, plan: result.plan, status: result.status });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Could not confirm payment";
+    res.status(400).json({ error: msg });
+  }
+});
+
+// Customer portal — manage subscription / billing. Requires an authenticated client.
 router.post("/stripe/portal", async (req, res): Promise<void> => {
-  const { email } = req.body ?? {};
-  if (!email) { res.status(400).json({ error: "email required" }); return; }
+  const auth = await authenticateClient(req);
+  if (!auth) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
 
   try {
     const stripe = await getUncachableStripeClient();
-    const client = await stripeStorage.getClientByEmail(email);
-    if (!client?.stripeCustomerId) {
+    const stripeCustomerId = (auth.client.stripeCustomerId as string | null) ?? null;
+    if (!stripeCustomerId) {
       res.status(404).json({ error: "No Stripe customer found for this account" });
       return;
     }
-    const baseUrl = "https://putitupbusiness.it";
     const session = await stripe.billingPortal.sessions.create({
-      customer: client.stripeCustomerId,
-      return_url: `${baseUrl}/putitup-business/dashboard`,
+      customer: stripeCustomerId,
+      return_url: `${baseUrl()}/putitup-business/dashboard`,
     });
     res.json({ url: session.url });
   } catch (err: unknown) {

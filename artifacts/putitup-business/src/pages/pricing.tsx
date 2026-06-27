@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
 import { Check, X, Zap, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { API_BASE } from "@/lib/api";
 import { useBusinessAuth } from "@/hooks/useBusinessAuth";
 
@@ -93,9 +93,18 @@ const plans = [
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
-  const { client } = useBusinessAuth();
+  const { client, loading: authLoading } = useBusinessAuth();
+  const autoStarted = useRef(false);
 
   const handleCheckout = async (planId: string) => {
+    // Checkout requires an authenticated client — the server binds the Stripe
+    // customer to the session token. If not signed in, create the account first.
+    const token = localStorage.getItem("pb_session_token") ?? "";
+    if (!client || !token) {
+      window.location.href = `/putitup-business/register?plan=${planId}`;
+      return;
+    }
+
     setLoading(planId);
     try {
       // Fetch products to find the right price ID
@@ -122,16 +131,10 @@ export default function Pricing() {
         return;
       }
 
-      const body: Record<string, unknown> = {
-        priceId: price.id,
-        email: client?.email ?? "",
-        clientId: client?.id ?? null,
-      };
-
       const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ priceId: price.id }),
       });
 
       const data = await res.json() as { url?: string; error?: string };
@@ -148,6 +151,19 @@ export default function Pricing() {
       setLoading(null);
     }
   };
+
+  // Auto-start checkout when arriving from registration (?plan=X&checkout=start).
+  useEffect(() => {
+    if (authLoading || autoStarted.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") !== "start") return;
+    const p = params.get("plan");
+    if (p && (p === "starter" || p === "business") && client) {
+      autoStarted.current = true;
+      handleCheckout(p);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, client]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

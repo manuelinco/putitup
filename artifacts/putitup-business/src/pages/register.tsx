@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 
+const VALID_PLANS = ["free", "starter", "business", "premium"];
+
 const plans = [
   { id: "free", label: "Free", price: "€0/mo", description: "5 dataset base/mese — 5 ad per download", highlight: "Senza carta" },
   { id: "starter", label: "Starter", price: "€9.99/mo", description: "Dataset base illimitati, niente ads" },
@@ -61,6 +63,12 @@ export default function Register() {
   const [success, setSuccess] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Pre-select plan from ?plan= (e.g. when arriving from the pricing page).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("plan");
+    if (p && VALID_PLANS.includes(p)) setForm((f) => ({ ...f, plan: p }));
+  }, []);
 
   const setField = (k: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -172,10 +180,19 @@ export default function Register() {
       localStorage.setItem("pb_client_email", regData.client.email);
       localStorage.setItem("pb_client_name", `${regData.client.firstName} ${regData.client.lastName}`);
       localStorage.setItem("pb_client_company", regData.client.company ?? "");
-      localStorage.setItem("pb_client_plan", form.plan);
+      // Server always creates accounts on 'free' — paid plans require payment.
+      localStorage.setItem("pb_client_plan", regData.client?.plan ?? "free");
       window.dispatchEvent(new Event("storage"));
       setSuccess(true);
-      setTimeout(() => navigate("/dashboard"), 2500);
+      // If a paid plan was selected, send the user to checkout to complete payment.
+      const wantsPaid = form.plan === "starter" || form.plan === "business";
+      setTimeout(() => {
+        if (wantsPaid) {
+          window.location.href = `/putitup-business/pricing?plan=${form.plan}&checkout=start`;
+        } else {
+          navigate("/dashboard");
+        }
+      }, 2500);
     } catch {
       setError("Errore di connessione — riprova");
     } finally {
@@ -202,7 +219,9 @@ export default function Register() {
           </div>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <div className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            Accesso alla dashboard in corso…
+            {form.plan === "starter" || form.plan === "business"
+              ? "Ti portiamo al pagamento sicuro…"
+              : "Accesso alla dashboard in corso…"}
           </div>
         </Card>
       </div>

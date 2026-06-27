@@ -4,6 +4,7 @@ import { randomBytes, createHmac, timingSafeEqual, pbkdf2Sync } from "crypto";
 import { db, clientsTable, clientOtpCodesTable, clientSessionsTable } from "@workspace/db";
 
 import { sendOtpEmail } from "../lib/email";
+import { reconcileClientPlan } from "../lib/stripePlanSync";
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -241,8 +242,11 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
     return;
   }
 
+  // Paid plans are NEVER granted at registration — they require a confirmed
+  // Stripe payment. We only echo the selected plan back so the client can route
+  // the user to checkout. Every new account starts on 'free'.
   const validPlans = ["free", "starter", "business", "premium"];
-  const clientPlan = validPlans.includes(String(plan ?? "free")) ? String(plan) : "free";
+  const selectedPlan = validPlans.includes(String(plan ?? "free")) ? String(plan) : "free";
 
   const pwHash = password && String(password).length >= 8 ? hashPassword(String(password)) : null;
 
@@ -258,7 +262,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
       postalCode: String(postalCode ?? "").trim() || null,
       vatCode: String(vatCode ?? "").trim() || null,
       company: String(company ?? "").trim() || null,
-      plan: clientPlan,
+      plan: "free",
       ...(pwHash ? { passwordHash: pwHash } : {}),
     })
     .returning();
@@ -280,7 +284,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
   });
 
   const { passwordHash: _ph, ...safeClient } = newClient as any;
-  res.json({ ok: true, token, client: safeClient, plan: String(plan ?? "free") });
+  res.json({ ok: true, token, client: safeClient, plan: safeClient.plan, selectedPlan });
 });
 
 router.get("/auth/client/me", async (req: Request, res: Response): Promise<void> => {
@@ -329,7 +333,9 @@ router.get("/auth/client/me", async (req: Request, res: Response): Promise<void>
     return;
   }
 
+  const reconciledPlan = await reconcileClientPlan(client as any);
   const { passwordHash: _ph, ...safeClient } = client as any;
+  safeClient.plan = reconciledPlan;
   res.json({ client: safeClient });
 });
 
