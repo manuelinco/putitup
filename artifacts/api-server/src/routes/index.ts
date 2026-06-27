@@ -18,6 +18,7 @@ import uploadRouter from "./upload";
 import otpRouter from "./otp";
 import statsRouter from "./stats";
 import stripeRouter from "./stripe";
+import agentRouter from "./agent";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(exportRouter);
 router.use(uploadRouter);
 router.use(otpRouter);
 router.use(stripeRouter);
+router.use(agentRouter);
 
 export default router;

@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./lib/stripeClient";
+import { startAgentCron } from "./lib/taskAgent";
 
 const rawPort = process.env["PORT"];
 if (!rawPort) throw new Error("PORT environment variable is required but was not provided.");
@@ -74,6 +75,10 @@ async function main() {
     }
     logger.info({ port }, "Server listening");
   });
+
+  // ── Task Agent cron: ogni ora genera nuove task da fonti web ──────────────
+  const agentIntervalMin = parseInt(process.env["AGENT_INTERVAL_MIN"] ?? "60", 10);
+  startAgentCron(agentIntervalMin * 60 * 1000);
 }
 
 main();
