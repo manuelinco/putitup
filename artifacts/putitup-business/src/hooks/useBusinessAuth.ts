@@ -38,9 +38,12 @@ export function useBusinessAuth() {
     }
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
       const res = await fetch(`${API_BASE}/api/auth/client/me`, {
         headers: { Authorization: `Bearer ${token}` },
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
 
       if (res.ok) {
         const { client: c } = await res.json() as { client: Record<string, unknown> };
