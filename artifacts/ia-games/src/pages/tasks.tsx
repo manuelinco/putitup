@@ -362,13 +362,34 @@ export default function Tasks() {
             <CardContent className="p-4 space-y-4">
               {/* Task header */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <Badge variant="outline" className={cn("text-[9px] uppercase", difficultyConfig[task.difficulty]?.color)}>
                     {difficultyConfig[task.difficulty]?.label}
                   </Badge>
                   <Badge variant="outline" className="text-[9px] text-muted-foreground uppercase">
                     {typeLabels[task.type] ?? task.type}
                   </Badge>
+                  {/* Angle category badge — shown for multi-angle image tasks */}
+                  {!!payload?.angleCategory && (
+                    <Badge variant="outline" className={cn(
+                      "text-[9px] uppercase font-black border",
+                      payload.angleCategory === "COLOR"    ? "text-pink-400 border-pink-400/40 bg-pink-400/10" :
+                      payload.angleCategory === "EMOTION"  ? "text-purple-400 border-purple-400/40 bg-purple-400/10" :
+                      payload.angleCategory === "SCALE"    ? "text-blue-400 border-blue-400/40 bg-blue-400/10" :
+                      payload.angleCategory === "SCENE"    ? "text-green-400 border-green-400/40 bg-green-400/10" :
+                      payload.angleCategory === "TIME"     ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10" :
+                      payload.angleCategory === "LIGHT"    ? "text-orange-400 border-orange-400/40 bg-orange-400/10" :
+                      payload.angleCategory === "SUBJECT"  ? "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" :
+                      payload.angleCategory === "ENERGY"   ? "text-red-400 border-red-400/40 bg-red-400/10" :
+                      payload.angleCategory === "TEXTURE"  ? "text-amber-400 border-amber-400/40 bg-amber-400/10" :
+                      payload.angleCategory === "STYLE"    ? "text-violet-400 border-violet-400/40 bg-violet-400/10" :
+                      payload.angleCategory === "NATURE"   ? "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" :
+                      payload.angleCategory === "GEOGRAPHY"? "text-teal-400 border-teal-400/40 bg-teal-400/10" :
+                      "text-muted-foreground border-border/40"
+                    )}>
+                      {String(payload.angleEmoji ?? "")} {String(payload.angleCategory)}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {comboMultiplier > 1 && !submitted && (

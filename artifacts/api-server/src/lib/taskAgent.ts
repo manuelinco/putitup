@@ -47,10 +47,17 @@ function pickRandom<T>(arr: T[], n: number): T[] {
   return [...arr].sort(() => Math.random() - 0.5).slice(0, n);
 }
 
-// ── Multi-angle image questions ────────────────────────────────────────────────
-// Each image gets N tasks with DIFFERENT questions — same URL, different angle.
+// ── Multi-angle image question system ─────────────────────────────────────────
+//
+// MATH: 1,000,000 unique Picsum seeds × 26 angles × (C(pool,4) option combos)
+//       → theoretically BILLIONS of unique (image, question, options) combinations.
+//
+// Each angle has a large option pool. We pick a random subset each time,
+// so even the SAME image + SAME question produces different answer options.
 
 interface ImageAngle {
+  category: string;      // shown as badge in the UI: "COLOR", "EMOTION", etc.
+  emoji: string;         // UI decoration
   question: string;
   optionPool: string[];
   pick: number;
@@ -58,63 +65,216 @@ interface ImageAngle {
 }
 
 const IMAGE_ANGLE_POOL: ImageAngle[] = [
+  // ── COLOR / PALETTE ───────────────────────────────────────────────────────
   {
-    question: "What emotion does this image primarily evoke?",
-    optionPool: ["joy", "calm", "sadness", "fear", "surprise", "disgust", "awe", "nostalgia"],
-    pick: 4, difficulty: "medium",
-  },
-  {
+    category: "COLOR", emoji: "🎨",
     question: "What is the dominant color in this image?",
-    optionPool: ["blue", "green", "red", "yellow", "brown", "grey", "white", "black", "orange", "purple"],
+    optionPool: ["red","blue","green","yellow","orange","purple","brown","grey","white","black","pink","cyan","teal","gold","silver","beige","navy","olive","maroon","magenta"],
     pick: 4, difficulty: "easy",
   },
   {
-    question: "What is the main subject of this image?",
-    optionPool: ["person", "animal", "landscape", "building", "object", "food", "vehicle", "abstract"],
-    pick: 4, difficulty: "easy",
-  },
-  {
-    question: "What type of scene is depicted?",
-    optionPool: ["urban", "rural", "indoor", "outdoor", "underwater", "aerial", "forest", "beach"],
-    pick: 4, difficulty: "easy",
-  },
-  {
-    question: "What is the overall mood of this image?",
-    optionPool: ["positive", "neutral", "negative", "mixed", "mysterious", "energetic", "peaceful"],
+    category: "COLOR", emoji: "🎨",
+    question: "How would you describe the color palette of this image?",
+    optionPool: ["warm tones","cool tones","monochromatic","complementary","pastel","saturated","desaturated","earthy","neon","metallic"],
     pick: 4, difficulty: "medium",
   },
   {
-    question: "How visually complex is this image?",
-    optionPool: ["very simple", "simple", "moderate", "complex", "very complex"],
+    category: "COLOR", emoji: "🎨",
+    question: "What percentage of this image appears to be dark-colored?",
+    optionPool: ["0–20%","20–40%","40–60%","60–80%","80–100%"],
+    pick: 4, difficulty: "easy",
+  },
+
+  // ── EMOTION / SENSATION ───────────────────────────────────────────────────
+  {
+    category: "EMOTION", emoji: "💭",
+    question: "What emotion does this image primarily evoke?",
+    optionPool: ["joy","calm","sadness","fear","surprise","disgust","awe","nostalgia","excitement","melancholy","serenity","unease","admiration","loneliness","hope","anxiety"],
+    pick: 4, difficulty: "medium",
+  },
+  {
+    category: "EMOTION", emoji: "💭",
+    question: "What sensation does this image evoke?",
+    optionPool: ["warm","cold","wet","dry","soft","rough","light","heavy","fresh","stale","sharp","gentle","spacious","claustrophobic","energizing","relaxing"],
+    pick: 4, difficulty: "medium",
+  },
+  {
+    category: "EMOTION", emoji: "💭",
+    question: "What mood best describes the atmosphere of this image?",
+    optionPool: ["cheerful","melancholic","tense","peaceful","mysterious","romantic","dramatic","whimsical","gloomy","vibrant","solemn","playful","nostalgic","surreal"],
+    pick: 4, difficulty: "medium",
+  },
+  {
+    category: "EMOTION", emoji: "💭",
+    question: "If this image were music, which genre would it be?",
+    optionPool: ["classical","jazz","rock","electronic","folk","hip-hop","ambient","opera","blues","pop","metal","country"],
+    pick: 4, difficulty: "hard",
+  },
+
+  // ── SCALE / DIMENSION ─────────────────────────────────────────────────────
+  {
+    category: "SCALE", emoji: "📐",
+    question: "How large does the main subject appear relative to the frame?",
+    optionPool: ["very small (< 10%)","small (10–30%)","medium (30–60%)","large (60–80%)","fills the frame (> 80%)"],
     pick: 4, difficulty: "easy",
   },
   {
+    category: "SCALE", emoji: "📐",
+    question: "What is the estimated depth of field in this image?",
+    optionPool: ["very shallow","shallow","moderate","deep","infinite / flat"],
+    pick: 4, difficulty: "hard",
+  },
+  {
+    category: "SCALE", emoji: "📐",
+    question: "How would you describe the spatial composition?",
+    optionPool: ["centered","rule of thirds","symmetrical","diagonal","asymmetrical","panoramic","close-up","wide shot","bird's eye","worm's eye"],
+    pick: 4, difficulty: "hard",
+  },
+
+  // ── ENVIRONMENT / SCENE ───────────────────────────────────────────────────
+  {
+    category: "SCENE", emoji: "🌍",
+    question: "What type of scene is depicted in this image?",
+    optionPool: ["urban street","natural landscape","indoor room","underwater","aerial view","forest","beach","desert","mountain","city skyline","rural field","arctic","jungle","cave","space"],
+    pick: 4, difficulty: "easy",
+  },
+  {
+    category: "SCENE", emoji: "🌍",
+    question: "What is the primary setting of this image?",
+    optionPool: ["home","office","restaurant","park","beach","forest","stadium","museum","school","hospital","factory","market","airport","church","lab"],
+    pick: 4, difficulty: "easy",
+  },
+
+  // ── TIME / SEASON ─────────────────────────────────────────────────────────
+  {
+    category: "TIME", emoji: "⏰",
     question: "What time of day does this image suggest?",
-    optionPool: ["dawn", "morning", "afternoon", "dusk", "night", "unclear"],
+    optionPool: ["dawn (4–7am)","morning (7–11am)","midday (11am–2pm)","afternoon (2–6pm)","sunset (6–8pm)","dusk (8–9pm)","night (9pm–4am)","unclear"],
     pick: 4, difficulty: "medium",
   },
   {
-    question: "What lighting condition is present in this image?",
-    optionPool: ["bright sunlight", "soft daylight", "artificial light", "low light", "dark", "mixed"],
+    category: "TIME", emoji: "⏰",
+    question: "What season does this image most closely suggest?",
+    optionPool: ["early spring","late spring","early summer","late summer","early autumn","late autumn","winter","unclear / no season"],
+    pick: 4, difficulty: "easy",
+  },
+  {
+    category: "TIME", emoji: "⏰",
+    question: "What historical era does this image suggest?",
+    optionPool: ["ancient (pre-500 AD)","medieval (500–1400)","early modern (1400–1800)","19th century","early 20th century","mid 20th century","modern (1980–2010)","contemporary (2010+)"],
+    pick: 4, difficulty: "hard",
+  },
+
+  // ── LIGHT / ATMOSPHERE ────────────────────────────────────────────────────
+  {
+    category: "LIGHT", emoji: "💡",
+    question: "How would you describe the lighting in this image?",
+    optionPool: ["bright sunlight","soft diffused light","artificial fluorescent","warm incandescent","candlelight","moonlight","neon","flash","backlit (silhouette)","overcast","fog","golden hour","blue hour"],
     pick: 4, difficulty: "medium",
   },
   {
-    question: "What season does this image suggest?",
-    optionPool: ["spring", "summer", "autumn", "winter", "unclear"],
+    category: "LIGHT", emoji: "💡",
+    question: "What is the contrast level in this image?",
+    optionPool: ["very low (flat)","low","medium","high","very high (dramatic)"],
+    pick: 4, difficulty: "medium",
+  },
+
+  // ── SUBJECT & FOCUS ───────────────────────────────────────────────────────
+  {
+    category: "SUBJECT", emoji: "🎯",
+    question: "What is the main subject of this image?",
+    optionPool: ["person","animal","plant","building","vehicle","food","object / product","text / sign","landscape","abstract pattern","water","sky","crowd","face"],
     pick: 4, difficulty: "easy",
   },
   {
-    question: "How would you rate the aesthetic quality of this image?",
-    optionPool: ["excellent", "good", "average", "poor"],
+    category: "SUBJECT", emoji: "🎯",
+    question: "How many distinct subjects can you identify in this image?",
+    optionPool: ["none","1","2–3","4–5","6–10","more than 10","unclear"],
     pick: 4, difficulty: "easy",
+  },
+  {
+    category: "SUBJECT", emoji: "🎯",
+    question: "What action or state is the main subject in?",
+    optionPool: ["still / static","moving slowly","moving quickly","falling","flying","interacting","resting","working","eating","playing","fighting","observing"],
+    pick: 4, difficulty: "medium",
+  },
+
+  // ── MOTION / ENERGY ───────────────────────────────────────────────────────
+  {
+    category: "ENERGY", emoji: "⚡",
+    question: "How much visual energy or dynamism does this image convey?",
+    optionPool: ["very calm (0)","calm (2)","moderate (5)","dynamic (7)","very dynamic (9)","chaotic (10)"],
+    pick: 4, difficulty: "medium",
+  },
+  {
+    category: "ENERGY", emoji: "⚡",
+    question: "Does this image suggest movement or stillness?",
+    optionPool: ["complete stillness","slight movement","moderate movement","fast movement","blurred motion","frozen motion","cyclical / repetitive"],
+    pick: 4, difficulty: "medium",
+  },
+
+  // ── TEXTURE / MATERIAL ────────────────────────────────────────────────────
+  {
+    category: "TEXTURE", emoji: "💎",
+    question: "What texture is most prominent in this image?",
+    optionPool: ["smooth","rough","glossy","matte","grainy","metallic","wooden","fabric","stone","liquid","sandy","organic","geometric"],
+    pick: 4, difficulty: "medium",
+  },
+
+  // ── STYLE / AESTHETIC ─────────────────────────────────────────────────────
+  {
+    category: "STYLE", emoji: "✨",
+    question: "Which visual style best describes this image?",
+    optionPool: ["photorealistic","cinematic","minimalist","maximalist","abstract","vintage / retro","futuristic","documentary","artistic","commercial / advertising","editorial","street photography"],
+    pick: 4, difficulty: "hard",
+  },
+  {
+    category: "STYLE", emoji: "✨",
+    question: "How would you classify this image's aesthetic?",
+    optionPool: ["elegant","raw","playful","serious","surreal","ordinary","luxurious","industrial","natural","urban","spiritual","scientific"],
+    pick: 4, difficulty: "hard",
+  },
+
+  // ── NATURE / ORGANIC ─────────────────────────────────────────────────────
+  {
+    category: "NATURE", emoji: "🌿",
+    question: "How much of this image contains natural elements?",
+    optionPool: ["0% (fully man-made)","1–25%","25–50%","50–75%","75–99%","100% (fully natural)"],
+    pick: 4, difficulty: "easy",
+  },
+  {
+    category: "NATURE", emoji: "🌿",
+    question: "What is the primary natural element in this image?",
+    optionPool: ["water","trees","sky","grass","rocks","flowers","animals","mountains","clouds","fire","ice","sand","none (artificial)"],
+    pick: 4, difficulty: "easy",
+  },
+
+  // ── GEOGRAPHY ─────────────────────────────────────────────────────────────
+  {
+    category: "GEOGRAPHY", emoji: "🗺️",
+    question: "In which continent or region does this image appear to be set?",
+    optionPool: ["Europe","North America","South America","Africa","Middle East","East Asia","South Asia","Southeast Asia","Oceania","Arctic / Antarctic","unclear"],
+    pick: 4, difficulty: "hard",
   },
 ];
 
-function getImageAngles(count: number): Array<{ question: string; options: string[]; difficulty: "easy" | "medium" | "hard" }> {
-  const shuffled = pickRandom(IMAGE_ANGLE_POOL, Math.min(count, IMAGE_ANGLE_POOL.length));
+function getImageAngles(
+  count: number,
+  preferredCategories?: string[],
+): Array<{ category: string; emoji: string; question: string; options: string[]; difficulty: "easy" | "medium" | "hard" }> {
+  let pool = IMAGE_ANGLE_POOL;
+  if (preferredCategories?.length) {
+    const preferred = pool.filter((a) => preferredCategories.includes(a.category));
+    const rest = pool.filter((a) => !preferredCategories.includes(a.category));
+    pool = [...preferred, ...rest];
+  }
+  const shuffled = pickRandom(pool, Math.min(count, pool.length));
   return shuffled.map((a) => ({
+    category: a.category,
+    emoji: a.emoji,
     question: a.question,
-    options: pickRandom(a.optionPool, a.pick),
+    // Randomise option subset every time → same image + same question = different options
+    options: pickRandom(a.optionPool, Math.min(a.pick, a.optionPool.length)),
     difficulty: a.difficulty,
   }));
 }
@@ -257,9 +417,19 @@ async function fetchWikipediaTexts(titles: string[], lang = "it"): Promise<Fetch
     }));
 }
 
-function fetchPicsumImages(count: number, offset = 0): FetchedContent[] {
+/**
+ * Picsum Photos — accepts any integer seed 0–999999.
+ * Using a large random range gives near-infinite unique image URLs,
+ * each returning a deterministic photo from Picsum's library.
+ * Combined with 26 question angles and randomised option subsets,
+ * the theoretical task space is in the billions.
+ */
+function fetchPicsumImages(count: number, seedOffset = 0): FetchedContent[] {
   return Array.from({ length: count }, (_, i) => {
-    const seed = `agent-${Date.now()}-${offset + i}`;
+    // Use large random seed from the full 0–999999 space
+    const seed = seedOffset > 0
+      ? seedOffset + i
+      : Math.floor(Math.random() * 1_000_000);
     return {
       type: "image" as const,
       imageUrl: `https://picsum.photos/seed/${seed}/640/480`,
@@ -689,6 +859,8 @@ export async function runTaskAgent(options: AgentRunOptions = {}): Promise<Agent
                   sourceName: content.sourceName,
                   agentGenerated: true,
                   angleTask: true,
+                  angleCategory: angle.category,
+                  angleEmoji: angle.emoji,
                 },
                 correctAnswer: null,
                 difficulty: angle.difficulty,
