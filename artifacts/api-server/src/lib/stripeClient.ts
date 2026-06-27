@@ -2,11 +2,22 @@ import Stripe from "stripe";
 import { StripeSync } from "stripe-replit-sync";
 
 async function getStripeCredentials(): Promise<{ secretKey: string; webhookSecret?: string }> {
+  // ── Fallback: env var (Render / production without Replit connector) ────────
+  if (process.env["STRIPE_SECRET_KEY"]) {
+    return {
+      secretKey: process.env["STRIPE_SECRET_KEY"],
+      webhookSecret: process.env["STRIPE_WEBHOOK_SECRET"],
+    };
+  }
+
+  // ── Replit connector (dev / Replit-hosted environments) ────────────────────
   const hostname = process.env["REPLIT_CONNECTORS_HOSTNAME"];
   const identity = process.env["REPL_IDENTITY"];
 
   if (!hostname || !identity) {
-    throw new Error("Missing Replit connector env vars (REPLIT_CONNECTORS_HOSTNAME / REPL_IDENTITY).");
+    throw new Error(
+      "Stripe not configured: set STRIPE_SECRET_KEY env var or connect the Replit Stripe integration.",
+    );
   }
 
   const resp = await fetch(
