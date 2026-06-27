@@ -40,19 +40,21 @@ interface Dataset {
 }
 
 const CATEGORY_MAP: Record<string, string> = {
-  "NLP": "NLP",
-  "Vision": "Vision",
-  "Computer Vision": "Vision",
-  "Audio": "Audio",
-  "Audio NLP": "Audio",
-  "Video Understanding": "Video",
-  "Geospatial AI": "Other",
-  "Medical AI": "Other",
-  "Document AI": "Other",
+  "nlp": "NLP",
+  "rlhf": "NLP",
+  "vision": "Vision",
+  "computer vision": "Vision",
+  "audio": "Audio",
+  "audio nlp": "Audio",
+  "video": "Video",
+  "video understanding": "Video",
+  "geospatial ai": "Other",
+  "medical ai": "Other",
+  "document ai": "Other",
 };
 
 function normCategory(cat: string): string {
-  return CATEGORY_MAP[cat] ?? "Other";
+  return CATEGORY_MAP[cat.toLowerCase()] ?? "Other";
 }
 
 function computeTier(accessType: string, adsRequired: number): Tier {
