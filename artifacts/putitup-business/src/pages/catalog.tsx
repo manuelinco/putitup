@@ -104,7 +104,11 @@ export default function Catalog() {
       .then((r) => r.json())
       .then((data: ApiDataset[]) => {
         if (Array.isArray(data)) {
-          setDatasets(data.filter((d) => d.status === "active").map(mapDataset));
+          setDatasets(
+            data
+              .filter((d) => d.status === "active" && (d.requestedTaskCount ?? 0) > 0)
+              .map(mapDataset)
+          );
         }
       })
       .catch(() => {})
