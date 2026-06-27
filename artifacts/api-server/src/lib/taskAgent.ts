@@ -181,20 +181,20 @@ async function generateTasksWithGroq(
       ? `Immagine da: ${content.sourceName} (URL: ${content.imageUrl})`
       : `Testo da ${content.sourceName}: "${content.text}"`;
 
-  const prompt = `Sei un esperto di data labeling per AI. Genera ${count} task di annotazione per questo contenuto.
+  const prompt = `You are an AI data labeling expert. Generate ${count} annotation tasks for this content.
 
-CONTENUTO: ${contentDesc}
-CATEGORIA DATASET: ${datasetCategory}
-LABEL DISPONIBILI: ${labels.join(", ")}
+CONTENT: ${contentDesc}
+DATASET CATEGORY: ${datasetCategory}
+AVAILABLE LABELS: ${labels.join(", ")}
 
-Genera task di classificazione variati e realistici. Per ogni task:
-- Scrivi una domanda chiara in italiano
-- Dai 3-4 opzioni di risposta (usa le label fornite)
-- Indica la risposta corretta se deducibile dal contenuto
-- Indica la difficoltà: easy | medium | hard
+Generate varied, realistic classification tasks. For each task:
+- Write a clear question in ENGLISH (no accented characters)
+- Provide 3-4 answer options (use the provided labels)
+- Indicate the correct answer if deducible from the content
+- Set difficulty: easy | medium | hard
 
-Rispondi SOLO con JSON valido, array di oggetti con campi: question, options (array), correctAnswer (stringa o null), difficulty.
-Esempio: [{"question":"...","options":["a","b","c"],"correctAnswer":"a","difficulty":"easy"}]`;
+Reply ONLY with valid JSON, an array of objects with fields: question, options (array), correctAnswer (string or null), difficulty.
+Example: [{"question":"...","options":["a","b","c"],"correctAnswer":"a","difficulty":"easy"}]`;
 
   try {
     const completion = await groq.chat.completions.create({
