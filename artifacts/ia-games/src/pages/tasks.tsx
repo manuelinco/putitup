@@ -247,7 +247,6 @@ export default function Tasks() {
           onComplete={handleAdComplete}
           onFail={handleAdFail}
           rewardText="+50 Energy"
-          adDuration={20}
         />
       )}
 
