@@ -20,8 +20,7 @@ type Phase =
   | "failed";
 
 const MAX_MISSES = 3;
-const DOT_APPEAR_AFTER_MS = 3000; // show dot 3s into the real ad
-const DOT_WINDOW_S = 3;           // seconds to tap the dot
+const DOT_WINDOW_S = 3; // seconds to tap the dot once it appears
 
 export function AdChallenge({
   onComplete,
@@ -94,12 +93,13 @@ export function AdChallenge({
       setTimeout(() => tryFinish(), 300);
     });
 
-    // Show dot after delay (while Adsgram ad is still playing)
+    // Show dot at a RANDOM moment during the ad (between 2s and 12s)
+    const randomDelay = 2000 + Math.random() * 10000;
     const dotTimer = setTimeout(() => {
       if (phaseRef.current !== "real_ad") return;
       setShowPortalDot(true);
       setPortalDotTimer(DOT_WINDOW_S);
-    }, DOT_APPEAR_AFTER_MS);
+    }, randomDelay);
 
     return () => clearTimeout(dotTimer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
