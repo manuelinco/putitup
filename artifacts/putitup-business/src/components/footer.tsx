@@ -32,7 +32,8 @@ export default function Footer() {
             <ul className="space-y-2">
               <li><Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">Privacy Policy</Link></li>
               <li><Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition-colors">Terms of Service</Link></li>
-              <li><a href="mailto:legal@putitupbusiness.it" className="text-sm text-muted-foreground hover:text-primary transition-colors">Legal Contact</a></li>
+              <li><Link href="/contact" className="text-sm text-muted-foreground hover:text-primary transition-colors">Contact Us</Link></li>
+              <li><a href="mailto:info@putitupbusiness.it" className="text-sm text-muted-foreground hover:text-primary transition-colors">info@putitupbusiness.it</a></li>
             </ul>
           </div>
         </div>

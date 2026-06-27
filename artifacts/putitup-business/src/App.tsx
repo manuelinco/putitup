@@ -13,6 +13,7 @@ import AdminLogin from "@/pages/admin-login";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
+import Contact from "@/pages/contact";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30000, retry: 1 } },
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/admin-login" component={AdminLogin} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
+      <Route path="/contact" component={Contact} />
       <Route component={NotFound} />
     </Switch>
   );

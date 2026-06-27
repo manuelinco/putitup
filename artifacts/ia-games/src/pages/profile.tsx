@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins, Gift, Copy, Users } from "lucide-react";
+import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins, Gift, Copy, Users, MessageSquare } from "lucide-react";
+import { ContactForm } from "@/components/contact-form";
 import { cn } from "@/lib/utils";
 import { API_BASE } from "@/lib/api";
 

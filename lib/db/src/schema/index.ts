@@ -11,3 +11,5 @@ export * from "./lotteryDraws";
 export * from "./pendingPayments";
 export * from "./contributorDatasets";
 export * from "./clientAuth";
+export * from "./chatMessages";
+export * from "./contactMessages";

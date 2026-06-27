@@ -19,6 +19,8 @@ import otpRouter from "./otp";
 import statsRouter from "./stats";
 import stripeRouter from "./stripe";
 import agentRouter from "./agent";
+import chatRouter from "./chat";
+import contactRouter from "./contact";
 
 const router: IRouter = Router();
 
@@ -42,5 +44,7 @@ router.use(uploadRouter);
 router.use(otpRouter);
 router.use(stripeRouter);
 router.use(agentRouter);
+router.use(chatRouter);
+router.use(contactRouter);
 
 export default router;

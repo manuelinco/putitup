@@ -1,8 +1,17 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, clientsTable, datasetsTable, datasetAccessTable } from "@workspace/db";
+import { db, clientsTable, datasetsTable, datasetAccessTable, clientSessionsTable } from "@workspace/db";
 import { pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from "crypto";
 import { verifyAdChallengeToken } from "./auth";
+
+const SESSION_SECRET = process.env["SESSION_SECRET"] ?? "fallback-secret-change-me";
+const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+
+function generateSessionToken(clientId: number): string {
+  const rand = randomBytes(32).toString("hex");
+  const sig = createHmac("sha256", SESSION_SECRET).update(`${clientId}:${rand}`).digest("hex");
+  return `${clientId}.${rand}.${sig}`;
+}
 
 const router: IRouter = Router();
 const TOKENS_PER_AD = 2;
@@ -48,8 +57,17 @@ router.post("/clients/login", async (req, res): Promise<void> => {
     return;
   }
 
+  const token = generateSessionToken(client.id);
+  const sessionExpiry = new Date(Date.now() + SESSION_EXPIRY_MS);
+  await db.insert(clientSessionsTable).values({
+    clientId: client.id,
+    token,
+    expiresAt: sessionExpiry,
+    userAgent: req.headers["user-agent"] ?? null,
+    ipAddress: String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "unknown").split(",")[0]!.trim(),
+  });
   const { passwordHash: _ph, ...safeClient } = client;
-  res.json({ client: safeClient });
+  res.json({ ok: true, token, client: safeClient });
 });
 
 router.post("/clients/set-password", async (req, res): Promise<void> => {

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, or } from "drizzle-orm";
 import { db, usersTable, taskResponsesTable, adsTrackingTable, rewardLedgerTable } from "@workspace/db";
+
 import {
   ListUsersQueryParams,
   GetUserParams,
@@ -9,6 +10,23 @@ import {
   GetUserStatsParams,
   GetUserByTelegramParams,
 } from "@workspace/api-zod";
+
+const ENERGY_REGEN_PER_30MIN = 1;
+const REGEN_INTERVAL_MS = 30 * 60 * 1000;
+
+async function applyPassiveEnergyRegen(user: typeof usersTable.$inferSelect): Promise<number> {
+  if (user.energy >= user.maxEnergy) return user.energy;
+  const now = Date.now();
+  const lastUpdate = user.energyUpdatedAt?.getTime() ?? user.createdAt.getTime();
+  const elapsed = now - lastUpdate;
+  const gained = Math.floor(elapsed / REGEN_INTERVAL_MS) * ENERGY_REGEN_PER_30MIN;
+  if (gained <= 0) return user.energy;
+  const newEnergy = Math.min(user.energy + gained, user.maxEnergy);
+  await db.update(usersTable)
+    .set({ energy: newEnergy, energyUpdatedAt: new Date() })
+    .where(eq(usersTable.id, user.id));
+  return newEnergy;
+}
 
 const router: IRouter = Router();
 
@@ -170,13 +188,15 @@ router.get("/users/:id/stats", async (req, res): Promise<void> => {
     .from(adsTrackingTable)
     .where(eq(adsTrackingTable.userId, params.data.id));
 
+  const currentEnergy = await applyPassiveEnergyRegen(user);
+
   res.json({
     userId: user.id,
     tasksCompleted,
     tasksCorrect,
     accuracyRate: Math.round(accuracyRate * 10) / 10,
     currentStreak: user.streak,
-    energy: user.energy,
+    energy: currentEnergy,
     maxEnergy: user.maxEnergy,
     xp: user.xp,
     level: user.level,

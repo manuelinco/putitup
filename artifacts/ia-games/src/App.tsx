@@ -22,6 +22,7 @@ const AdminClaim  = lazy(() => import("@/pages/admin-claim"));
 const Controller  = lazy(() => import("@/pages/supervisor"));
 const UploadPage  = lazy(() => import("@/pages/upload"));
 const PrivacyPage = lazy(() => import("@/pages/privacy"));
+const ChatPage    = lazy(() => import("@/pages/chat"));
 
 function PageLoader() {
   return (
@@ -87,6 +88,7 @@ function Router() {
         <Route path="/controller" component={Controller} />
         <Route path="/upload" component={UploadPage} />
         <Route path="/privacy" component={PrivacyPage} />
+        <Route path="/chat" component={ChatPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

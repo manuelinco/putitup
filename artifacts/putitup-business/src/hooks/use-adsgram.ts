@@ -14,7 +14,7 @@ export const ADSGRAM_BLOCK_ID_WEB = "int-36439";
 export function useAdsgram() {
   const showAd = (): Promise<boolean> => {
     return new Promise((resolve) => {
-      if (!window.Adsgram || ADSGRAM_BLOCK_ID_WEB === "YOUR_WEB_BLOCK_ID") {
+      if (!window.Adsgram || (ADSGRAM_BLOCK_ID_WEB as string) === "YOUR_WEB_BLOCK_ID") {
         resolve(false);
         return;
       }

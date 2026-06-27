@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Building2, CheckCircle2, Mail, User, Zap, Shield, RotateCcw,
-  Phone, MapPin, CreditCard, Home,
+  Phone, MapPin, CreditCard, Home, Eye, EyeOff, Lock,
 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 
@@ -32,12 +32,15 @@ interface FormData {
   email: string;
   company: string;
   plan: string;
+  password: string;
+  confirmPassword: string;
 }
 
 export default function Register() {
   const [, navigate] = useLocation();
 
   const [step, setStep] = useState<Step>("dati");
+  const [showPw, setShowPw] = useState(false);
   const [form, setForm] = useState<FormData>({
     firstName: "",
     lastName: "",
@@ -49,6 +52,8 @@ export default function Register() {
     email: "",
     company: "",
     plan: "free",
+    password: "",
+    confirmPassword: "",
   });
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +77,8 @@ export default function Register() {
 
   const handleSendCode = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (form.password.length < 8) { setError("La password deve avere almeno 8 caratteri"); return; }
+    if (form.password !== form.confirmPassword) { setError("Le password non corrispondono"); return; }
     setError(null);
     setLoading(true);
     try {
@@ -154,6 +161,7 @@ export default function Register() {
           vatCode: form.vatCode.trim() || null,
           company: form.company.trim() || null,
           plan: form.plan,
+          password: form.password,
         }),
       });
       const regData = await regRes.json().catch(() => ({}));
@@ -366,8 +374,32 @@ export default function Register() {
                 </p>
               </div>
 
+              {/* Password */}
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="password" className="text-xs">Password *</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="password" type={showPw ? "text" : "password"} placeholder="Min 8 caratteri" className="pl-10 pr-10"
+                      value={form.password} onChange={setField("password")} required minLength={8} autoComplete="new-password" />
+                    <button type="button" onClick={() => setShowPw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword" className="text-xs">Conferma password *</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="confirmPassword" type={showPw ? "text" : "password"} placeholder="Ripeti la password" className="pl-10"
+                      value={form.confirmPassword} onChange={setField("confirmPassword")} required minLength={8} autoComplete="new-password" />
+                  </div>
+                </div>
+              </div>
+
               <Button type="submit" className="w-full" size="lg"
-                disabled={loading || !form.firstName || !form.lastName || !form.email || !form.address || !form.postalCode || !form.city || !form.phone}>
+                disabled={loading || !form.firstName || !form.lastName || !form.email || !form.address || !form.postalCode || !form.city || !form.phone || form.password.length < 8}>
                 {loading ? "Invio codice…" : "Continua — Verifica email →"}
               </Button>
             </form>

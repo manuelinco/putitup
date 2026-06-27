@@ -1,8 +1,15 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, gt, lt } from "drizzle-orm";
-import { randomBytes, createHmac, timingSafeEqual } from "crypto";
+import { randomBytes, createHmac, timingSafeEqual, pbkdf2Sync } from "crypto";
 import { db, clientsTable, clientOtpCodesTable, clientSessionsTable } from "@workspace/db";
+
 import { sendOtpEmail } from "../lib/email";
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = pbkdf2Sync(password, salt, 10000, 64, "sha512").toString("hex");
+  return `${salt}:${hash}`;
+}
 
 const router: IRouter = Router();
 
@@ -196,7 +203,7 @@ router.post("/auth/otp/verify", async (req: Request, res: Response): Promise<voi
 router.post("/auth/otp/register", async (req: Request, res: Response): Promise<void> => {
   const {
     email, firstName, lastName, company, phone, plan,
-    vatCode, address, postalCode, city,
+    vatCode, address, postalCode, city, password,
   } = req.body ?? {};
 
   if (!email || !firstName || !lastName) {
@@ -237,6 +244,8 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
   const validPlans = ["free", "starter", "business", "premium"];
   const clientPlan = validPlans.includes(String(plan ?? "free")) ? String(plan) : "free";
 
+  const pwHash = password && String(password).length >= 8 ? hashPassword(String(password)) : null;
+
   const [newClient] = await db
     .insert(clientsTable)
     .values({
@@ -250,6 +259,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
       vatCode: String(vatCode ?? "").trim() || null,
       company: String(company ?? "").trim() || null,
       plan: clientPlan,
+      ...(pwHash ? { passwordHash: pwHash } : {}),
     })
     .returning();
 
