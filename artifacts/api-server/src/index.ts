@@ -13,70 +13,93 @@ if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${raw
 
 // ── Startup DB migrations (local schema changes) ────────────────────────────
 async function runAppMigrations() {
-  const client = await pool.connect();
-  try {
-    // Add new enum values for audio/video task types (IF NOT EXISTS via DO block)
-    await client.query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'audio' AND enumtypid = 'task_type'::regtype) THEN
-          ALTER TYPE task_type ADD VALUE 'audio';
-        END IF;
-      END $$;
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'video' AND enumtypid = 'task_type'::regtype) THEN
-          ALTER TYPE task_type ADD VALUE 'video';
-        END IF;
-      END $$;
-    `);
-    await client.query(`
-      ALTER TABLE tasks
-        ADD COLUMN IF NOT EXISTS needs_relabeling boolean NOT NULL DEFAULT false,
-        ADD COLUMN IF NOT EXISTS relabel_options   jsonb;
-      ALTER TABLE clients
-        ADD COLUMN IF NOT EXISTS stripe_customer_id      text,
-        ADD COLUMN IF NOT EXISTS stripe_subscription_id  text,
-        ADD COLUMN IF NOT EXISTS plan                    text NOT NULL DEFAULT 'free';
-    `);
-
-    // M-2: anti-replay store for Telegram initData. Safe & idempotent — this is
-    // the migration the production (Neon) DB needs before the token-auth backend
-    // can serve POST /auth/telegram/validate, so it is applied here on every boot
-    // rather than requiring manual psql access to production.
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS used_init_data (
-        hash       text PRIMARY KEY,
-        expires_at timestamptz NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS used_init_data_expires_idx ON used_init_data (expires_at);
-    `);
-
-    logger.info("App migrations OK");
-  } catch (err) {
-    logger.warn({ err }, "App migrations warning (non-fatal)");
-  } finally {
-    client.release();
+  // M-2 (CRITICAL, isolated): anti-replay store for Telegram initData. Run first
+  // in its own connection/try so an unrelated legacy ALTER failure can never
+  // silently skip creating the table that POST /auth/telegram/validate depends
+  // on. Idempotent — this is the migration production (Neon) needs and we apply
+  // it on every boot because we have no direct psql access to production.
+  {
+    const c = await pool.connect();
+    try {
+      await c.query(`
+        CREATE TABLE IF NOT EXISTS used_init_data (
+          hash       text PRIMARY KEY,
+          expires_at timestamptz NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS used_init_data_expires_idx ON used_init_data (expires_at);
+      `);
+      logger.info("used_init_data migration OK");
+    } catch (err) {
+      logger.error({ err }, "used_init_data migration FAILED — Telegram initData replay store unavailable");
+    } finally {
+      c.release();
+    }
   }
 
-  // H-2: hard duplicate guard on task_responses, applied in its own isolated
-  // transaction. Best-effort & non-fatal: a live DB that already contains
-  // duplicate (user_id, task_id) rows from the pre-fix race will reject the
-  // unique index — that is fine, because the per-user row lock + in-transaction
-  // duplicate check in POST /responses already prevent NEW duplicates. The hard
-  // constraint just adds defence-in-depth once any legacy duplicates are removed.
-  const uqClient = await pool.connect();
+  // Legacy idempotent schema (enum values + columns). Non-fatal.
+  {
+    const client = await pool.connect();
+    try {
+      // Add new enum values for audio/video task types (IF NOT EXISTS via DO block)
+      await client.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'audio' AND enumtypid = 'task_type'::regtype) THEN
+            ALTER TYPE task_type ADD VALUE 'audio';
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'video' AND enumtypid = 'task_type'::regtype) THEN
+            ALTER TYPE task_type ADD VALUE 'video';
+          END IF;
+        END $$;
+      `);
+      await client.query(`
+        ALTER TABLE tasks
+          ADD COLUMN IF NOT EXISTS needs_relabeling boolean NOT NULL DEFAULT false,
+          ADD COLUMN IF NOT EXISTS relabel_options   jsonb;
+        ALTER TABLE clients
+          ADD COLUMN IF NOT EXISTS stripe_customer_id      text,
+          ADD COLUMN IF NOT EXISTS stripe_subscription_id  text,
+          ADD COLUMN IF NOT EXISTS plan                    text NOT NULL DEFAULT 'free';
+      `);
+      logger.info("App migrations OK");
+    } catch (err) {
+      logger.warn({ err }, "App migrations warning (non-fatal)");
+    } finally {
+      client.release();
+    }
+  }
+
+  // H-2: hard duplicate guard on task_responses. Best-effort & non-fatal: a live
+  // DB that already contains duplicate (user_id, task_id) rows from the pre-fix
+  // race will reject the unique index — that is fine, because the per-user row
+  // lock + in-transaction duplicate check in POST /responses already prevent NEW
+  // duplicates. Bounded with lock_timeout/statement_timeout (via SET LOCAL inside
+  // a transaction, which auto-resets) so a non-concurrent CREATE INDEX on a large
+  // hot table can never block or hang the deploy before app.listen.
   try {
-    await uqClient.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS task_responses_user_task_unique
-        ON task_responses (user_id, task_id);
-    `);
-    logger.info("task_responses unique index OK");
+    const uq = await pool.connect();
+    try {
+      await uq.query("BEGIN");
+      await uq.query("SET LOCAL lock_timeout = '5s'");
+      await uq.query("SET LOCAL statement_timeout = '30s'");
+      await uq.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS task_responses_user_task_unique
+          ON task_responses (user_id, task_id);
+      `);
+      await uq.query("COMMIT");
+      logger.info("task_responses unique index OK");
+    } catch (err) {
+      try { await uq.query("ROLLBACK"); } catch { /* ignore */ }
+      logger.warn(
+        { err },
+        "task_responses unique index skipped (existing duplicate rows or lock/statement timeout) — non-fatal; runtime guard in POST /responses still prevents new dupes",
+      );
+    } finally {
+      uq.release();
+    }
   } catch (err) {
-    logger.warn(
-      { err },
-      "task_responses unique index skipped (likely existing duplicate rows) — manual dedupe needed to enable the hard constraint",
-    );
-  } finally {
-    uqClient.release();
+    logger.warn({ err }, "task_responses unique index: could not acquire a DB connection (non-fatal)");
   }
 }
 
