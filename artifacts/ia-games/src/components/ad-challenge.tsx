@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { X, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
+import { X, CheckCircle2, Loader2 } from "lucide-react";
 import { useAdsgram } from "@/hooks/use-adsgram";
 
 interface AdChallengeProps {
@@ -11,41 +11,39 @@ interface AdChallengeProps {
 }
 
 /*
-  FLOW (Adsgram real ad):
-  1. showAd() → Adsgram opens its full-screen overlay
-  2. We render z-index:2147483647 transparent overlay on top
-  3. After dotDelay ms the red dot appears over the ad
-  4. 4 seconds to tap the dot:
-     - Tapped   → dotClicked=true, dot disappears, wait for ad to finish
-     - Not tapped → "blocked" screen covers the ad (dark overlay with message)
-  5. showAd() resolves:
-     - done=true  + dotClicked=true  → onComplete
-     - done=true  + dotClicked=false → onFail
-     - done=false (skipped)          → onFail
+  FLOW (Real Adsgram):
+  1. showAd() → Adsgram opens its full-screen overlay (native level, above our React tree)
+  2. We wait silently (phase=ad_playing). Adsgram handles everything.
+  3. Adsgram closes and promise resolves:
+     - done=true  → show red dot challenge on OUR dark screen (post-ad)
+                    user has DOT_WINDOW_S seconds to tap → onComplete
+     - done=false → fall back to fake ad with embedded dot challenge
 
-  FALLBACK (Adsgram not configured / dev):
-  showAd() returns false immediately → fake countdown ad with dot overlay
+  FLOW (Fake ad — Adsgram not available / returns false):
+  1. Show fake countdown video (adDuration seconds)
+  2. Red dot appears at random point (25%–70% of duration)
+  3. User taps dot → onComplete
+  4. User misses dot (timer 0 or video ends) → onFail
+
+  KEY FIXES vs previous version:
+  - No dot during real Adsgram (it was hidden behind Adsgram's UI anyway)
+  - handleDotTap always calls completeNow() — no more fake-mode bug
+  - Single unified dot countdown: timer=0 → failNow() always
 */
 
 type Phase =
-  | "init"         // brief startup
-  | "ad_playing"   // ad playing, dot not yet shown (transparent overlay)
-  | "dot_active"   // red dot on screen over the ad
-  | "dot_clicked"  // dot was tapped, ad still playing (wait for callback)
-  | "blocked"      // dot missed → dark block screen over the ad
-  | "fake_ad"      // fallback: no Adsgram → fake countdown
-  | "fake_dot"     // dot inside fake countdown
+  | "init"
+  | "ad_playing"
+  | "dot_active"
+  | "fake_ad"
   | "done"
   | "failed";
 
-const DOT_WINDOW_S  = 4;
-const DOT_DELAY_MIN = 3500;
-const DOT_DELAY_MAX = 11000;
-
+const DOT_WINDOW_S   = 6;
 const FAKE_AD_DURATION = 25;
 
 function randomDotPos() {
-  const margin = 14;
+  const margin = 15;
   return {
     x: margin + Math.random() * (100 - margin * 2),
     y: margin + Math.random() * (100 - margin * 2),
@@ -67,17 +65,15 @@ export function AdChallenge({
   const [showHint, setShowHint] = useState(false);
   const [fakeMode, setFakeMode] = useState(false);
 
-  /* fake-ad state */
   const [fakeProgress, setFakeProgress]   = useState(0);
   const [fakeSkipAvail, setFakeSkipAvail] = useState(false);
 
-  const dotClickedRef  = useRef(false);
-  const adResolvedRef  = useRef<boolean | null>(null);
-  const dotShownRef    = useRef(false);
+  const fakeDotShown = useRef(false);
+  const fakeDotDone  = useRef(false);
+  const fakeStartRef = useRef(0);
 
   const { showAd } = useAdsgram();
 
-  /* ── helpers ── */
   const completeNow = useCallback(() => {
     setPhase("done");
     setTimeout(() => onComplete(), 450);
@@ -89,108 +85,57 @@ export function AdChallenge({
   }, [onFail]);
 
   const showDot = useCallback(() => {
-    dotShownRef.current = true;
     setDotPos(randomDotPos());
     setDotTimer(DOT_WINDOW_S);
     setShowHint(true);
-    setTimeout(() => setShowHint(false), 1500);
+    setTimeout(() => setShowHint(false), 2000);
     setPhase("dot_active");
   }, []);
 
   /* ══════════════════════════════════
-     MAIN EFFECT — start Adsgram
+     START
   ══════════════════════════════════ */
   useEffect(() => {
-    let dotTimeout: ReturnType<typeof setTimeout>;
+    setPhase("ad_playing");
 
-    const adPromise = showAd();
-
-    /* Give Adsgram 400ms to open its overlay, then switch to ad_playing */
-    const initTimeout = setTimeout(() => {
-      /* adPromise already resolved (false) → Adsgram not configured → fake ad */
-      if (adResolvedRef.current !== null) return;
-      setPhase("ad_playing");
-
-      const delay = DOT_DELAY_MIN + Math.random() * (DOT_DELAY_MAX - DOT_DELAY_MIN);
-      dotTimeout = setTimeout(() => {
-        if (phaseRef.current !== "ad_playing") return;
-        showDot();
-      }, delay);
-    }, 400);
-
-    adPromise.then((done) => {
-      adResolvedRef.current = done;
-      clearTimeout(dotTimeout);
-
+    showAd().then((done) => {
       if (!done) {
-        /* Adsgram not configured OR user skipped → fallback fake ad */
         setFakeMode(true);
         setPhase("fake_ad");
         return;
       }
-
-      /* Ad watched fully */
-      if (dotClickedRef.current) {
-        completeNow();
-      } else if (!dotShownRef.current) {
-        /* Dot never appeared (very short ad) → show post-ad challenge */
-        showDot();
-      } else {
-        /* Dot shown but not clicked */
-        failNow();
-      }
+      /* Real ad watched fully → show dot challenge now (Adsgram overlay is closed) */
+      showDot();
     });
-
-    return () => {
-      clearTimeout(initTimeout);
-      clearTimeout(dotTimeout);
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── dot countdown (over real ad) ── */
+  /* ── Unified dot countdown ── */
   useEffect(() => {
     if (phase !== "dot_active") return;
     if (dotTimer <= 0) {
-      /* check if ad already resolved */
-      if (adResolvedRef.current === true) {
-        /* ad finished while dot was active and missed */
-        failNow();
-      } else {
-        /* ad still playing → block it */
-        setPhase("blocked");
-      }
+      failNow();
       return;
     }
     const t = setTimeout(() => setDotTimer((d) => d - 1), 1000);
     return () => clearTimeout(t);
   }, [phase, dotTimer, failNow]);
 
-  const handleDotTap = () => {
+  /* Tapping the dot always succeeds — no mode logic */
+  const handleDotTap = useCallback(() => {
     if (phase !== "dot_active") return;
-    dotClickedRef.current = true;
-    if (adResolvedRef.current === true) {
-      completeNow();
-    } else if (adResolvedRef.current === false) {
-      failNow();
-    } else {
-      /* ad still playing → go transparent, wait */
-      setPhase("dot_clicked");
-    }
-  };
+    completeNow();
+  }, [phase, completeNow]);
 
   /* ═══════════════════════════════
-     FAKE AD (fallback / dev)
+     FAKE AD
   ═══════════════════════════════ */
-  const fakeStartRef  = useRef<number>(0);
-  const fakeDotDone   = useRef(false);
-
   useEffect(() => {
     if (phase !== "fake_ad") return;
     fakeStartRef.current = Date.now();
     fakeDotDone.current  = false;
+    fakeDotShown.current = false;
 
-    /* schedule dot between 25%–70% of ad */
     const dotAt = (adDuration * 1000) * (0.25 + Math.random() * 0.45);
 
     const iv = setInterval(() => {
@@ -199,22 +144,20 @@ export function AdChallenge({
       setFakeProgress(progress);
       if (progress >= 85) setFakeSkipAvail(true);
 
-      /* trigger dot */
       if (!fakeDotDone.current && elapsed * 1000 >= dotAt && phaseRef.current === "fake_ad") {
-        fakeDotDone.current = true;
+        fakeDotDone.current  = true;
+        fakeDotShown.current = true;
         clearInterval(iv);
         showDot();
         return;
       }
+
       if (progress >= 100) {
         clearInterval(iv);
-        /* reached end without dot (dot never shown) → show dot now */
-        if (!dotShownRef.current) {
+        if (!fakeDotShown.current) {
           showDot();
-        } else if (!dotClickedRef.current) {
-          failNow();
         } else {
-          completeNow();
+          failNow();
         }
       }
     }, 80);
@@ -223,23 +166,9 @@ export function AdChallenge({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  /* fake dot countdown */
-  useEffect(() => {
-    if (phase !== "fake_dot") return;
-    if (dotTimer <= 0) {
-      failNow();
-      return;
-    }
-    const t = setTimeout(() => setDotTimer((d) => d - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, dotTimer, failNow]);
-
-  /* ── when dot_active is triggered from fake_ad context ── */
-  /* dot_active serves both real-ad and fake-ad overlays */
-
-  /* ═══════════════════════
+  /* ═══════════════
      RESULT SCREENS
-  ═══════════════════════ */
+  ═══════════════ */
   if (phase === "done") {
     return (
       <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -253,128 +182,100 @@ export function AdChallenge({
 
   if (phase === "failed") {
     return (
-      <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/85 backdrop-blur-sm">
-        <div className="flex flex-col items-center gap-3 text-center px-6">
-          <X className="w-12 h-12 text-destructive" />
-          <p className="font-black text-destructive text-base">Accesso negato</p>
-          <p className="text-[11px] text-white/50">Guarda il video e tocca il punto rosso</p>
+      <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/90 backdrop-blur-sm">
+        <div className="flex flex-col items-center gap-4 text-center px-8">
+          <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
+            <X className="w-9 h-9 text-red-400" />
+          </div>
+          <div className="space-y-1">
+            <p className="font-black text-white text-lg">Accesso negato</p>
+            <p className="text-[12px] text-white/50">Non hai toccato il punto rosso in tempo</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  /* ═══════════════════════
-     INIT LOADER
-  ═══════════════════════ */
-  if (phase === "init") {
+  /* ══════════════════════════════════
+     REAL AD WAITING (Adsgram playing)
+     Nearly invisible — Adsgram is above us
+  ══════════════════════════════════ */
+  if (phase === "init" || phase === "ad_playing") {
     return (
-      <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/70">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="fixed inset-0 z-[100] flex items-end justify-center pb-8 pointer-events-none">
+        <div className="flex items-center gap-2 bg-black/60 rounded-full px-4 py-2 border border-white/10">
+          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+          <span className="text-[11px] text-white/60 font-semibold">Caricamento ad…</span>
+        </div>
       </div>
     );
   }
 
-  /* ═══════════════════════
-     BLOCKED SCREEN (dot missed while real ad plays)
-  ═══════════════════════ */
-  if (phase === "blocked") {
+  /* ══════════════════════════════════════════════════
+     POST-AD DOT CHALLENGE (real Adsgram, done=true)
+     Adsgram overlay is closed — we own the screen
+  ══════════════════════════════════════════════════ */
+  if (phase === "dot_active" && !fakeMode) {
     return (
-      <div className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center gap-5 bg-black/92">
-        <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center">
-          <X className="w-10 h-10 text-red-400" />
+      <div className="fixed inset-0 z-[2147483647] bg-black flex items-center justify-center overflow-hidden">
+        {/* Timer bar */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-white/10">
+          <div
+            className={cn("h-full transition-all duration-1000",
+              dotTimer <= 2 ? "bg-red-500" : "bg-primary")}
+            style={{ width: `${(dotTimer / DOT_WINDOW_S) * 100}%` }}
+          />
         </div>
-        <div className="text-center space-y-1">
-          <p className="font-black text-white text-xl">Video Bloccato</p>
-          <p className="text-white/50 text-sm px-8">Non hai toccato il punto rosso in tempo</p>
+
+        {/* Top badge */}
+        <div className="absolute top-5 left-0 right-0 flex justify-center">
+          <div className="flex items-center gap-2 bg-black/80 border border-red-500/50 rounded-full px-5 py-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping absolute" />
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 relative" />
+            <span className="text-white text-[13px] font-black ml-1">Tocca il punto rosso!</span>
+            <span className={cn(
+              "text-[13px] font-black tabular-nums ml-1",
+              dotTimer <= 2 ? "text-red-400 animate-pulse" : "text-white/60"
+            )}>{dotTimer}s</span>
+          </div>
         </div>
-        <button
-          onClick={failNow}
-          className="mt-2 px-6 py-2.5 rounded-full bg-white/10 border border-white/20 text-white/80 text-sm font-semibold active:opacity-70"
-        >
-          Chiudi
-        </button>
-      </div>
-    );
-  }
 
-  /* ═══════════════════════════════════════════════════════
-     OVERLAY (appears on top of Adsgram or fake ad)
-     z-index MAX so it floats above the Adsgram player
-  ═══════════════════════════════════════════════════════ */
-  /* Only use transparent real-ad overlay when NOT in fake mode */
-  const isOverAd = !fakeMode && (phase === "ad_playing" || phase === "dot_active" || phase === "dot_clicked");
-  const isFakePaused = phase === "dot_active" && adResolvedRef.current === false;
-
-  if (isOverAd) {
-    return (
-      /* Outer: pointer-events NONE so touches pass through to Adsgram except on the dot */
-      <div className="fixed inset-0 z-[2147483647] pointer-events-none">
-
-        {/* Dot active: dim + timer bar + hint + dot */}
-        {phase === "dot_active" && (
-          <>
-            {/* Slight dim so dot is visible over bright video */}
-            <div className="absolute inset-0 bg-black/20" />
-
-            {/* Timer bar at top */}
-            <div className="absolute top-0 left-0 right-0 h-[3px] bg-black/40">
-              <div
-                className={cn(
-                  "h-full transition-all duration-1000",
-                  dotTimer <= 1 ? "bg-red-500" : "bg-red-400"
-                )}
-                style={{ width: `${(dotTimer / DOT_WINDOW_S) * 100}%` }}
-              />
-            </div>
-
-            {/* Hint toast */}
-            {showHint && (
-              <div className="absolute top-5 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[12px] font-black px-4 py-1.5 rounded-full border border-red-400/60 whitespace-nowrap pointer-events-none">
-                👆 Tocca il punto rosso!
-              </div>
-            )}
-
-            {/* Countdown badge */}
-            <div
-              className={cn(
-                "absolute top-12 right-4 bg-black/60 border rounded-full px-2.5 py-1 text-[11px] font-black tabular-nums pointer-events-none",
-                dotTimer <= 1 ? "border-red-500 text-red-400 animate-pulse" : "border-white/20 text-white/70"
-              )}
-            >
-              {dotTimer}s
-            </div>
-
-            {/* Red dot — pointer-events auto so it receives taps */}
-            <button
-              onClick={handleDotTap}
-              style={{
-                position: "absolute",
-                left: `${dotPos.x}%`,
-                top: `${dotPos.y}%`,
-                transform: "translate(-50%, -50%)",
-                pointerEvents: "auto",
-              }}
-              className="w-14 h-14 rounded-full bg-red-500 border-[3px] border-white shadow-[0_0_32px_12px_rgba(239,68,68,0.85)] animate-pulse active:scale-90 transition-transform touch-manipulation"
-              aria-label="Tocca il punto rosso"
-            />
-          </>
+        {/* Instruction hint */}
+        {showHint && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-white/10 text-white text-[12px] font-bold px-4 py-1.5 rounded-full border border-white/20 whitespace-nowrap animate-bounce">
+            👆 Tocca il punto rosso per continuare!
+          </div>
         )}
 
-        {/* dot_clicked: completely transparent — just waiting for Adsgram callback */}
+        {/* Background pattern */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-900 to-black" />
+
+        {/* Red dot */}
+        <button
+          onClick={handleDotTap}
+          style={{
+            position: "absolute",
+            left: `${dotPos.x}%`,
+            top: `${dotPos.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+          className="w-16 h-16 rounded-full bg-red-500 border-[4px] border-white shadow-[0_0_50px_20px_rgba(239,68,68,0.9)] animate-pulse active:scale-90 transition-transform touch-manipulation z-10"
+          aria-label="Tocca il punto rosso"
+        />
       </div>
     );
   }
 
-  /* ═══════════════════════════════════════════
-     FAKE AD (no Adsgram — dev / fallback)
-  ═══════════════════════════════════════════ */
+  /* ════════════════════════════════════════
+     FAKE AD + dot overlay (fakeMode)
+  ════════════════════════════════════════ */
   const skipCooldown = Math.max(0, Math.ceil(adDuration * 0.85 - (fakeProgress / 100) * adDuration));
 
   return (
     <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/90 p-4">
       <div className="w-full max-w-sm">
         <div className={cn(
-          "relative bg-card border rounded-2xl overflow-hidden transition-all duration-300",
+          "relative bg-card border rounded-2xl overflow-hidden",
           phase === "dot_active"
             ? "border-red-500/70 shadow-[0_0_30px_rgba(239,68,68,0.35)]"
             : "border-primary/40 shadow-[0_0_30px_rgba(168,85,247,0.2)]"
@@ -397,42 +298,37 @@ export function AdChallenge({
           {/* Video area */}
           <div className="relative h-56 bg-gradient-to-br from-primary/20 via-card to-accent/10 flex flex-col items-center justify-center select-none overflow-hidden">
 
-            {/* Fake video content */}
             <div className={cn(
               "text-center space-y-2 transition-all duration-300",
-              phase === "dot_active" ? "blur-sm opacity-30 pointer-events-none" : ""
+              phase === "dot_active" ? "blur-sm opacity-20 pointer-events-none" : ""
             )}>
               <div className="text-4xl font-black bg-gradient-to-br from-primary via-accent to-secondary bg-clip-text text-transparent">PUTITUP</div>
               <p className="text-xs text-muted-foreground font-semibold">Label AI Data · Earn Real Crypto</p>
               <div className="px-3 py-1 rounded-full bg-primary/20 border border-primary/30 text-xs font-bold text-primary inline-block">{rewardText}</div>
             </div>
 
-            {/* Red dot overlaid on fake video */}
+            {/* Red dot overlay inside fake ad */}
             {phase === "dot_active" && (
               <>
-                <div className="absolute inset-0 bg-black/40" />
+                <div className="absolute inset-0 bg-black/50" />
 
-                {/* Timer bar */}
                 <div className="absolute top-0 left-0 right-0 h-[3px] bg-black/40">
                   <div
-                    className={cn("h-full transition-all duration-1000", dotTimer <= 1 ? "bg-red-500" : "bg-red-400")}
+                    className={cn("h-full transition-all duration-1000", dotTimer <= 2 ? "bg-red-500" : "bg-red-400")}
                     style={{ width: `${(dotTimer / DOT_WINDOW_S) * 100}%` }}
                   />
                 </div>
 
-                {/* Paused badge */}
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-black/70 border border-red-500/60 rounded-full px-3 py-1">
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 bg-black/80 border border-red-500/60 rounded-full px-3 py-1">
                   <span className="text-red-400 text-[11px] font-black">⏸ PAUSED · {dotTimer}s</span>
                 </div>
 
-                {/* Hint */}
                 {showHint && (
-                  <div className="absolute top-10 left-1/2 -translate-x-1/2 z-10 bg-black/60 text-white text-[11px] font-black px-3 py-1 rounded-full border border-red-400/50 whitespace-nowrap">
+                  <div className="absolute top-10 left-1/2 -translate-x-1/2 z-10 bg-black/70 text-white text-[11px] font-black px-3 py-1.5 rounded-full border border-red-400/50 whitespace-nowrap animate-bounce">
                     👆 Tocca il punto rosso!
                   </div>
                 )}
 
-                {/* Red dot */}
                 <button
                   onClick={handleDotTap}
                   style={{
@@ -442,7 +338,7 @@ export function AdChallenge({
                     transform: "translate(-50%, -50%)",
                     zIndex: 20,
                   }}
-                  className="w-14 h-14 rounded-full bg-red-500 border-[3px] border-white/90 shadow-[0_0_28px_10px_rgba(239,68,68,0.85)] animate-pulse active:scale-90 transition-transform touch-manipulation"
+                  className="w-14 h-14 rounded-full bg-red-500 border-[3px] border-white/90 shadow-[0_0_30px_12px_rgba(239,68,68,0.9)] animate-pulse active:scale-90 transition-transform touch-manipulation"
                   aria-label="Tocca il punto rosso"
                 />
               </>
@@ -450,14 +346,17 @@ export function AdChallenge({
           </div>
 
           {/* Progress bar */}
-          {(phase === "fake_ad") && (
+          {phase === "fake_ad" && (
             <div className="px-4 py-3 space-y-1.5 bg-muted/20">
               <div className="flex justify-between text-[9px] text-muted-foreground font-semibold">
-                <span>WATCHING AD</span><span>{Math.round(fakeProgress)}%</span>
+                <span>WATCHING AD</span>
+                <span>{Math.round(fakeProgress)}%</span>
               </div>
               <div className="h-1.5 bg-muted/50 rounded-full overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-100"
-                  style={{ width: `${fakeProgress}%` }} />
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-100"
+                  style={{ width: `${fakeProgress}%` }}
+                />
               </div>
             </div>
           )}
