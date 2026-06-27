@@ -28,11 +28,11 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <p className="mb-3 text-sm font-semibold text-foreground">Company</p>
+            <p className="mb-3 text-sm font-semibold text-foreground">Legal</p>
             <ul className="space-y-2">
-              <li><span className="text-sm text-muted-foreground">About Us</span></li>
-              <li><span className="text-sm text-muted-foreground">Privacy Policy</span></li>
-              <li><span className="text-sm text-muted-foreground">Terms of Service</span></li>
+              <li><Link href="/privacy" className="text-sm text-muted-foreground hover:text-primary transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="text-sm text-muted-foreground hover:text-primary transition-colors">Terms of Service</Link></li>
+              <li><a href="mailto:legal@putitupbusiness.it" className="text-sm text-muted-foreground hover:text-primary transition-colors">Legal Contact</a></li>
             </ul>
           </div>
         </div>

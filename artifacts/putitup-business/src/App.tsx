@@ -10,6 +10,8 @@ import DatasetDetail from "@/pages/dataset-detail";
 import Pricing from "@/pages/pricing";
 import Dashboard from "@/pages/dashboard";
 import AdminLogin from "@/pages/admin-login";
+import Privacy from "@/pages/privacy";
+import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -27,6 +29,8 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/admin-login" component={AdminLogin} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route component={NotFound} />
     </Switch>
   );
