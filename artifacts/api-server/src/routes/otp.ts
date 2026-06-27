@@ -234,6 +234,9 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
     return;
   }
 
+  const validPlans = ["free", "starter", "business", "premium"];
+  const clientPlan = validPlans.includes(String(plan ?? "free")) ? String(plan) : "free";
+
   const [newClient] = await db
     .insert(clientsTable)
     .values({
@@ -246,6 +249,7 @@ router.post("/auth/otp/register", async (req: Request, res: Response): Promise<v
       postalCode: String(postalCode ?? "").trim() || null,
       vatCode: String(vatCode ?? "").trim() || null,
       company: String(company ?? "").trim() || null,
+      plan: clientPlan,
     })
     .returning();
 

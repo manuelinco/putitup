@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { API_BASE } from "@/lib/api";
 
 export interface BusinessClient {
   id: number;
   email: string;
   name: string;
   company: string;
-  tokenBalance?: number;
-  totalAdsWatched?: number;
+  plan: string;
+  tokenBalance: number;
+  totalAdsWatched: number;
 }
 
-function readSession(): BusinessClient | null {
+function readSessionBase(): { id: number; email: string; name: string; company: string } | null {
   const id = localStorage.getItem("pb_client_id");
   const email = localStorage.getItem("pb_client_email");
   const name = localStorage.getItem("pb_client_name");
@@ -20,31 +22,88 @@ function readSession(): BusinessClient | null {
 }
 
 export function useBusinessAuth() {
-  const [client, setClient] = useState<BusinessClient | null>(readSession);
+  const [client, setClient] = useState<BusinessClient | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const sync = () => setClient(readSession());
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
+  const loadSession = useCallback(async () => {
+    const base = readSessionBase();
+    if (!base) { setClient(null); setLoading(false); return; }
+
+    const token = localStorage.getItem("pb_session_token") ?? "";
+    if (!token) {
+      const plan = localStorage.getItem("pb_client_plan") ?? "free";
+      setClient({ ...base, plan, tokenBalance: 0, totalAdsWatched: 0 });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/client/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        const { client: c } = await res.json() as { client: Record<string, unknown> };
+        const plan = (c.plan as string | undefined) ?? localStorage.getItem("pb_client_plan") ?? "free";
+        localStorage.setItem("pb_client_plan", plan);
+        setClient({
+          id: base.id,
+          email: base.email,
+          name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || base.name,
+          company: (c.company as string) ?? base.company,
+          plan,
+          tokenBalance: (c.tokenBalance as number) ?? 0,
+          totalAdsWatched: (c.totalAdsWatched as number) ?? 0,
+        });
+      } else if (res.status === 401) {
+        // Token scaduto — disconnetti
+        ["pb_client_id","pb_client_email","pb_client_name","pb_client_company",
+         "pb_session_token","pb_client_plan","pb_is_admin"].forEach(k => localStorage.removeItem(k));
+        setClient(null);
+      } else {
+        // Fallback localStorage
+        const plan = localStorage.getItem("pb_client_plan") ?? "free";
+        setClient({ ...base, plan, tokenBalance: 0, totalAdsWatched: 0 });
+      }
+    } catch {
+      // Rete non disponibile — usa dati locali
+      const plan = localStorage.getItem("pb_client_plan") ?? "free";
+      setClient({ ...base, plan, tokenBalance: 0, totalAdsWatched: 0 });
+    }
+
+    setLoading(false);
   }, []);
 
+  useEffect(() => { loadSession(); }, [loadSession]);
+
+  useEffect(() => {
+    const sync = () => { setLoading(true); loadSession(); };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, [loadSession]);
+
   const logout = useCallback(() => {
-    localStorage.removeItem("pb_client_id");
-    localStorage.removeItem("pb_client_email");
-    localStorage.removeItem("pb_client_name");
-    localStorage.removeItem("pb_client_company");
+    const token = localStorage.getItem("pb_session_token") ?? "";
+    if (token) {
+      fetch(`${API_BASE}/api/auth/client/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
+    ["pb_client_id","pb_client_email","pb_client_name","pb_client_company",
+     "pb_session_token","pb_client_plan","pb_is_admin"].forEach(k => localStorage.removeItem(k));
     setClient(null);
     window.dispatchEvent(new Event("storage"));
   }, []);
 
-  return { client, logout };
+  return { client, loading, logout, refresh: loadSession };
 }
 
 export function useRequireBusinessAuth() {
-  const { client } = useBusinessAuth();
+  const { client, loading } = useBusinessAuth();
   const [, navigate] = useLocation();
   useEffect(() => {
-    if (!client) navigate("/login");
-  }, [client]);
+    if (!loading && !client) navigate("/login");
+  }, [client, loading]);
   return client;
 }
