@@ -17,6 +17,7 @@ import exportRouter from "./export";
 import uploadRouter from "./upload";
 import otpRouter from "./otp";
 import statsRouter from "./stats";
+import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(telegramRouter);
 router.use(exportRouter);
 router.use(uploadRouter);
 router.use(otpRouter);
+router.use(stripeRouter);
 
 export default router;

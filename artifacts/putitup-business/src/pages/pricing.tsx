@@ -4,8 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
-import { Check, X, Zap } from "lucide-react";
+import { Check, X, Zap, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { API_BASE } from "@/lib/api";
+import { useBusinessAuth } from "@/hooks/useBusinessAuth";
 
 const plans = [
   {
@@ -14,7 +16,7 @@ const plans = [
     monthlyPrice: 0,
     yearlyPrice: 0,
     description: "Start exploring PUTITUP datasets at zero cost. Watch ads to unlock downloads.",
-    badge: "No card needed",
+    badge: null as string | null,
     features: [
       { label: "Up to 5 basic datasets/month", included: true },
       { label: "Watch 5 ads per dataset download", included: true },
@@ -33,7 +35,8 @@ const plans = [
     monthlyPrice: 9.99,
     yearlyPrice: 79,
     description: "Perfect for solo researchers and small teams evaluating data quality.",
-    badge: null,
+    badge: null as string | null,
+    stripePlanKey: "starter",
     features: [
       { label: "Access to BASIC datasets", included: true },
       { label: "Up to 3 datasets / month", included: true },
@@ -53,6 +56,7 @@ const plans = [
     yearlyPrice: 120,
     description: "For growing teams that need unlimited access and faster turnaround.",
     badge: "Most Popular",
+    stripePlanKey: "business",
     features: [
       { label: "Access to BASIC datasets", included: true },
       { label: "Access to MEDIUM datasets", included: true },
@@ -68,8 +72,8 @@ const plans = [
   {
     id: "premium",
     name: "Premium",
-    monthlyPrice: null,
-    yearlyPrice: null,
+    monthlyPrice: null as number | null,
+    yearlyPrice: null as number | null,
     description: "Enterprise-grade SLA with custom dataset creation on demand.",
     badge: "Custom",
     features: [
@@ -88,6 +92,62 @@ const plans = [
 
 export default function Pricing() {
   const [yearly, setYearly] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
+  const { client } = useBusinessAuth();
+
+  const handleCheckout = async (planId: string) => {
+    setLoading(planId);
+    try {
+      // Fetch products to find the right price ID
+      const productsRes = await fetch(`${API_BASE}/api/stripe/products`);
+      const { products } = await productsRes.json() as {
+        products: { id: string; name: string; metadata: Record<string, string>; prices: { id: string; unit_amount: number; interval: string | null }[] }[];
+      };
+
+      const product = products.find(
+        (p) => p.metadata?.plan === planId || p.name.toLowerCase() === planId,
+      );
+
+      if (!product) {
+        // No Stripe product yet — redirect to register with plan pre-selected
+        window.location.href = `/putitup-business/register?plan=${planId}`;
+        return;
+      }
+
+      const interval = yearly ? "year" : "month";
+      const price = product.prices.find((p) => p.interval === interval) ?? product.prices[0];
+
+      if (!price) {
+        window.location.href = `/putitup-business/register?plan=${planId}`;
+        return;
+      }
+
+      const body: Record<string, unknown> = {
+        priceId: price.id,
+        email: client?.email ?? "",
+        clientId: client?.id ?? null,
+      };
+
+      const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json() as { url?: string; error?: string };
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        // Fallback: send to register with plan hint
+        window.location.href = `/putitup-business/register?plan=${planId}`;
+      }
+    } catch {
+      window.location.href = `/putitup-business/register?plan=${planId}`;
+    } finally {
+      setLoading(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -120,94 +180,109 @@ export default function Pricing() {
                 }`}
               >
                 Yearly
-                <Badge variant="secondary" className="text-[10px]">Save 40%</Badge>
+                <Badge variant="secondary" className="text-[10px]">Save ~20%</Badge>
               </button>
             </div>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-4">
-            {plans.map((plan) => (
-              <Card
-                key={plan.id}
-                className={`relative flex flex-col border-border bg-card ${
-                  plan.badge === "Most Popular"
-                    ? "border-primary ring-1 ring-primary"
-                    : ""
-                }`}
-              >
-                {plan.badge && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className={plan.badge === "Most Popular" ? "bg-primary" : "bg-secondary text-secondary-foreground"}>
-                      {plan.badge === "Most Popular" && <Zap className="mr-1 h-3 w-3" />}
-                      {plan.badge}
-                    </Badge>
-                  </div>
-                )}
-                <CardHeader className="pb-4 pt-8">
-                  <h3 className="text-xl font-bold">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground">{plan.description}</p>
-                  <div className="mt-4">
-                    {plan.monthlyPrice !== null ? (
-                      <div className="flex items-end gap-1">
-                        <span className="text-4xl font-bold">
-                          {plan.monthlyPrice === 0 ? "€0" : `€${yearly ? plan.yearlyPrice : plan.monthlyPrice}`}
-                        </span>
-                        {plan.monthlyPrice > 0 && (
-                          <span className="mb-1 text-muted-foreground">
-                            /{yearly ? "yr" : "mo"}
+            {plans.map((plan) => {
+              const isLoading = loading === plan.id;
+              const isPaid = plan.id === "starter" || plan.id === "business";
+              return (
+                <Card
+                  key={plan.id}
+                  className={`relative flex flex-col border-border bg-card ${
+                    plan.badge === "Most Popular"
+                      ? "border-primary ring-1 ring-primary"
+                      : ""
+                  }`}
+                >
+                  {plan.badge && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className={plan.badge === "Most Popular" ? "bg-primary" : "bg-secondary text-secondary-foreground"}>
+                        {plan.badge === "Most Popular" && <Zap className="mr-1 h-3 w-3" />}
+                        {plan.badge}
+                      </Badge>
+                    </div>
+                  )}
+                  <CardHeader className="pb-4 pt-8">
+                    <h3 className="text-xl font-bold">{plan.name}</h3>
+                    <p className="text-sm text-muted-foreground">{plan.description}</p>
+                    <div className="mt-4">
+                      {plan.monthlyPrice !== null ? (
+                        <div className="flex items-end gap-1">
+                          <span className="text-4xl font-bold">
+                            {plan.monthlyPrice === 0 ? "€0" : `€${yearly ? plan.yearlyPrice : plan.monthlyPrice}`}
                           </span>
-                        )}
-                        {plan.monthlyPrice === 0 && (
-                          <span className="mb-1 text-muted-foreground">/forever</span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-end gap-1">
-                        <span className="text-4xl font-bold">Custom</span>
-                      </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-1 flex-col gap-6">
-                  <ul className="flex flex-col gap-3">
-                    {plan.features.map((f) => (
-                      <li key={f.label} className="flex items-start gap-3 text-sm">
-                        {f.included ? (
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        ) : (
-                          <X className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40" />
-                        )}
-                        <span className={f.included ? "text-foreground" : "text-muted-foreground/40"}>
-                          {f.label}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-auto">
-                    {plan.id === "premium" ? (
-                      <Button variant="outline" className="w-full" disabled>
-                        Contact Sales
-                      </Button>
-                    ) : plan.id === "free" ? (
-                      <Link href="/register">
-                        <Button className="w-full" variant="secondary">
-                          Start for Free
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Link href="/register">
+                          {plan.monthlyPrice > 0 && (
+                            <span className="mb-1 text-muted-foreground">
+                              /{yearly ? "yr" : "mo"}
+                            </span>
+                          )}
+                          {plan.monthlyPrice === 0 && (
+                            <span className="mb-1 text-muted-foreground">/forever</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-end gap-1">
+                          <span className="text-4xl font-bold">Custom</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col gap-6">
+                    <ul className="flex flex-col gap-3">
+                      {plan.features.map((f) => (
+                        <li key={f.label} className="flex items-start gap-3 text-sm">
+                          {f.included ? (
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                          ) : (
+                            <X className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40" />
+                          )}
+                          <span className={f.included ? "text-foreground" : "text-muted-foreground/40"}>
+                            {f.label}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-auto">
+                      {plan.id === "premium" ? (
+                        <a href="mailto:sales@putitupbusiness.it">
+                          <Button variant="outline" className="w-full">
+                            Contact Sales
+                          </Button>
+                        </a>
+                      ) : plan.id === "free" ? (
+                        <Link href="/register">
+                          <Button className="w-full" variant="secondary">
+                            Start for Free
+                          </Button>
+                        </Link>
+                      ) : (
                         <Button
                           className="w-full"
                           variant={plan.badge === "Most Popular" ? "default" : "outline"}
+                          disabled={isLoading}
+                          onClick={() => handleCheckout(plan.id)}
                         >
-                          Get Started
+                          {isLoading ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Redirecting...</>
+                          ) : (
+                            "Get Started"
+                          )}
                         </Button>
-                      </Link>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      )}
+                      {isPaid && (
+                        <p className="mt-2 text-center text-[10px] text-muted-foreground">
+                          Secure payment via Stripe &middot; Cancel anytime
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           <div className="mt-16 rounded-xl border border-border bg-card p-8 text-center">
@@ -216,10 +291,11 @@ export default function Pricing() {
               Tell us what you need — domain, language, task type, volume — and our team
               will design a labeling pipeline and deliver a dataset to your exact specs.
             </p>
-            <Button variant="outline" size="lg" disabled>
-              Request Custom Dataset
-            </Button>
-            <p className="mt-2 text-xs text-muted-foreground">Custom orders coming soon</p>
+            <a href="mailto:sales@putitupbusiness.it">
+              <Button variant="outline" size="lg">
+                Request Custom Dataset
+              </Button>
+            </a>
           </div>
         </div>
       </section>

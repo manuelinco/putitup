@@ -22,7 +22,9 @@
     "express-rate-limit": "^8.5.0",
     "helmet": "^8.1.0",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "stripe": "^22.3.0",
+    "stripe-replit-sync": "^1.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

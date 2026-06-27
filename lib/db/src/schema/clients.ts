@@ -34,6 +34,10 @@ export const clientsTable = pgTable("clients", {
   lastAdAt: timestamp("last_ad_at", { withTimezone: true }),
   lastAdResetAt: timestamp("last_ad_reset_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Stripe billing
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  plan: text("plan").notNull().default("free"), // free | starter | business | premium
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({
