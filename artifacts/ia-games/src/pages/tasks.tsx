@@ -197,11 +197,16 @@ export default function Tasks() {
   const handleAdComplete = async () => {
     setShowAdChallenge(false);
     setAdPending(false);
-    await watchAd.mutateAsync({ data: { userId, adType: "rewarded" } });
-    refetchStats();
-    refreshUser();
-    notification("success");
-    refetchTask();
+    try {
+      await watchAd.mutateAsync({ data: { userId, adType: "rewarded" } });
+      refetchStats();
+      refreshUser();
+      notification("success");
+      refetchTask();
+    } catch {
+      notification("error");
+      setSubmitError("Ricarica energia non riuscita — riprova tra poco.");
+    }
   };
 
   // Anti-bot penalty: drain energy + 90s cooldown before next ad (persists across refreshes)

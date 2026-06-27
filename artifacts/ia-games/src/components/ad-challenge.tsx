@@ -90,19 +90,23 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks" }: Ad
   phaseRef.current  = phase;
   const dotDoneRef  = useRef(false);                        // dot already shown+resolved?
   const triggerRef  = useRef(DOT_MIN_PCT + Math.random() * (DOT_MAX_PCT - DOT_MIN_PCT));
+  const progressRef = useRef(0);                            // authoritative progress (avoids setState-in-updater)
+  const terminalRef = useRef(false);                        // done/failed already fired?
 
   /* inject keyframes once */
   useEffect(() => { ensureKeyframes(); }, []);
 
-  /* ── result helpers ── */
+  /* ── result helpers (single-shot, guarded synchronously) ── */
   const succeed = useCallback(() => {
-    if (phaseRef.current === "done" || phaseRef.current === "failed") return;
+    if (terminalRef.current) return;
+    terminalRef.current = true;
     setPhase("done");
     setTimeout(onComplete, 600);
   }, [onComplete]);
 
   const failOut = useCallback(() => {
-    if (phaseRef.current === "done" || phaseRef.current === "failed") return;
+    if (terminalRef.current) return;
+    terminalRef.current = true;
     setPhase("failed");
     setTimeout(onFail, 800);
   }, [onFail]);
@@ -115,31 +119,36 @@ export function AdChallenge({ onComplete, onFail, rewardText = "+10 Tasks" }: Ad
 
   /* ══════════════════════════════
      VIDEO PLAYBACK (progress fill)
+     Side effects live in the interval body (NOT inside a setState updater)
   ══════════════════════════════ */
   useEffect(() => {
     if (phase !== "playing") return;
 
     const id = setInterval(() => {
-      setProgress((p) => {
-        const next = p + (TICK_MS / VIDEO_MS) * 100;
+      const next = progressRef.current + (TICK_MS / VIDEO_MS) * 100;
 
-        // Time to show the dot? → freeze the video.
-        if (!dotDoneRef.current && next >= triggerRef.current) {
-          setDotPos(randomDotPos());
-          setDotSecs(DOT_WINDOW);
-          setShowHint(true);
-          setTimeout(() => setShowHint(false), 2200);
-          setPhase("dot");
-          return triggerRef.current; // freeze progress here
-        }
+      // Time to show the dot? → freeze the video.
+      if (!dotDoneRef.current && next >= triggerRef.current) {
+        progressRef.current = triggerRef.current;
+        setProgress(triggerRef.current); // freeze progress here
+        setDotPos(randomDotPos());
+        setDotSecs(DOT_WINDOW);
+        setShowHint(true);
+        setTimeout(() => setShowHint(false), 2200);
+        setPhase("dot");
+        return;
+      }
 
-        // Reached the end (only possible after the dot was tapped).
-        if (next >= 100) {
-          succeed();
-          return 100;
-        }
-        return next;
-      });
+      // Reached the end (only possible after the dot was tapped).
+      if (next >= 100) {
+        progressRef.current = 100;
+        setProgress(100);
+        succeed();
+        return;
+      }
+
+      progressRef.current = next;
+      setProgress(next);
     }, TICK_MS);
 
     return () => clearInterval(id);
