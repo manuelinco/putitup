@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-export const ADSGRAM_BLOCK_ID = "YOUR_TELEGRAM_BLOCK_ID";
+export const ADSGRAM_BLOCK_ID = "int-36439";
 
 export function useAdsgram() {
   const showAd = (): Promise<boolean> => {
