@@ -90,7 +90,7 @@ interface PendingPayment {
   } | null;
 }
 
-type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer";
+type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer" | "lottery";
 
 export default function Admin() {
   const { data: analytics } = useGetAnalyticsSummary();
@@ -110,6 +110,11 @@ export default function Admin() {
   const [minipimer, setMinipimer] = useState<{id: number; name: string; category: string; status: string; approvedTasks: number; totalTasks: number; readyToExport: boolean}[]>([]);
   const [minipimerLoading, setMinipimerLoading] = useState(false);
   const [minipimerExporting, setMinipimerExporting] = useState<number | null>(null);
+
+  const [lotteryDatasets, setLotteryDatasets] = useState<{id: number; name: string; lotteryPool: number; lotteryWinners: number; lotteryDrawnAt: string | null; recordCount: number | null}[]>([]);
+  const [lotteryLoading, setLotteryLoading] = useState(false);
+  const [drawingLottery, setDrawingLottery] = useState<number | null>(null);
+  const [lotteryResults, setLotteryResults] = useState<Record<number, {winners: {userId: number; username: string; amountTon: number}[]; prizePoolTon: number} | null>>({});
 
   const [batchTasks, setBatchTasks] = useState<TaskEntry[]>([emptyTask()]);
   const [currentTask, setCurrentTask] = useState<TaskEntry>(emptyTask());
@@ -260,6 +265,38 @@ export default function Admin() {
   };
 
   useEffect(() => {
+    if (activeSection !== "lottery") return;
+    setLotteryLoading(true);
+    apiFetch("/api/datasets?limit=100")
+      .then((data: any) => {
+        const list = Array.isArray(data) ? data : [];
+        setLotteryDatasets(list.filter((d: any) => d.lotteryPool > 0));
+      })
+      .catch(() => {})
+      .finally(() => setLotteryLoading(false));
+  }, [activeSection]);
+
+  const handleDrawLottery = async (datasetId: number) => {
+    setDrawingLottery(datasetId);
+    try {
+      const result = await apiFetch(`/api/datasets/${datasetId}/lottery/draw`, {
+        method: "POST",
+        body: JSON.stringify({ adminId: 1 }),
+      });
+      setLotteryResults((prev) => ({ ...prev, [datasetId]: result }));
+      apiFetch("/api/datasets?limit=100")
+        .then((data: any) => {
+          const list = Array.isArray(data) ? data : [];
+          setLotteryDatasets(list.filter((d: any) => d.lotteryPool > 0));
+        }).catch(() => {});
+    } catch (e: any) {
+      alert(`Errore estrazione: ${e.message}`);
+    } finally {
+      setDrawingLottery(null);
+    }
+  };
+
+  useEffect(() => {
     if (activeSection !== "minipimer") return;
     setMinipimerLoading(true);
     apiFetch("/api/datasets/minipimer/summary")
@@ -301,6 +338,7 @@ export default function Admin() {
     { id: "payments", label: "Pagamenti", icon: Wallet },
     { id: "approve", label: "Approva", icon: CheckCircle },
     { id: "users", label: "Utenti", icon: Users },
+    { id: "lottery", label: "Lottery", icon: Trophy },
     { id: "minipimer", label: "Minipimer", icon: Download },
   ];
 
@@ -907,6 +945,76 @@ export default function Admin() {
                     <div className="text-xs text-muted-foreground text-center py-8">Nessun dataset trovato</div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ─── LOTTERY ───────────────────────────────── */}
+        {activeSection === "lottery" && (
+          <div className="space-y-3">
+            <Card className="border-yellow-500/30 bg-yellow-500/5">
+              <CardHeader className="p-3 pb-2 border-b border-border/30">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+                  Lottery Draw — Dataset Prize Pools
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 space-y-3">
+                {lotteryLoading && (
+                  <div className="text-xs text-muted-foreground text-center py-4">Caricamento…</div>
+                )}
+                {!lotteryLoading && lotteryDatasets.length === 0 && (
+                  <div className="text-xs text-muted-foreground text-center py-4">
+                    Nessun dataset con lottery pool configurato.
+                  </div>
+                )}
+                {lotteryDatasets.map((ds) => {
+                  const result = lotteryResults[ds.id];
+                  return (
+                    <div key={ds.id} className="rounded-lg border border-border/40 bg-card/60 p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold leading-tight">{ds.name}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Pool: <span className="text-yellow-400 font-bold">{ds.lotteryPool} TON</span>
+                            {" · "}{ds.lotteryWinners} winner{ds.lotteryWinners !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        {ds.lotteryDrawnAt ? (
+                          <Badge variant="outline" className="text-[9px] border-green-500/40 text-green-400 shrink-0">
+                            Estratta ✓
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="h-7 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 hover:bg-yellow-500/30 shrink-0"
+                            disabled={drawingLottery === ds.id}
+                            onClick={() => handleDrawLottery(ds.id)}
+                          >
+                            {drawingLottery === ds.id ? "Estrazione…" : "🎰 Estrai"}
+                          </Button>
+                        )}
+                      </div>
+                      {ds.lotteryDrawnAt && !result && (
+                        <p className="text-[10px] text-muted-foreground">
+                          Estratta il {new Date(ds.lotteryDrawnAt).toLocaleDateString("it-IT")}
+                        </p>
+                      )}
+                      {result && (
+                        <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-2 space-y-1">
+                          <p className="text-[10px] font-bold text-yellow-400">🏆 Vincitori estratti!</p>
+                          {result.winners.map((w) => (
+                            <div key={w.userId} className="flex items-center justify-between text-[10px]">
+                              <span className="font-mono text-foreground">@{w.username}</span>
+                              <span className="text-yellow-400 font-bold">{w.amountTon.toFixed(4)} TON</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
           </div>

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import Nav from "@/components/nav";
 import Footer from "@/components/footer";
+import { AdminPanel } from "@/components/admin-panel";
 import { useBusinessAuth } from "@/hooks/useBusinessAuth";
 import {
   ArrowUpRight, BarChart3, Building2, Database, Download,
@@ -44,7 +45,7 @@ const methodLabel: Record<string, string> = {
   ads: "Pubblicità",
 };
 
-type Tab = "dataset" | "profilo" | "piano";
+type Tab = "dataset" | "profilo" | "piano" | "admin";
 
 export default function Dashboard() {
   const { client, logout } = useBusinessAuth();
@@ -141,12 +142,12 @@ export default function Dashboard() {
           </div>
 
           {/* Tab Nav */}
-          <div className="flex gap-1 mb-6 border-b border-border">
-            {(["dataset", "profilo", "piano"] as Tab[]).map((t) => (
+          <div className="flex gap-1 mb-6 border-b border-border overflow-x-auto">
+            {(["dataset", "profilo", "piano", ...(isAdmin ? ["admin"] : [])] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px
+                className={`px-4 py-2 text-sm font-medium whitespace-nowrap capitalize transition-colors border-b-2 -mb-px
                   ${tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                {t === "dataset" ? "I miei Dataset" : t === "profilo" ? "Profilo" : "Piano & Accesso"}
+                {t === "dataset" ? "I miei Dataset" : t === "profilo" ? "Profilo" : t === "piano" ? "Piano & Accesso" : "⚙️ Admin"}
               </button>
             ))}
           </div>
@@ -403,6 +404,11 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {/* Tab: Admin */}
+          {tab === "admin" && isAdmin && (
+            <AdminPanel apiBase={API_BASE} />
           )}
 
         </div>

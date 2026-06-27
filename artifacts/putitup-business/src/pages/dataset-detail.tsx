@@ -106,10 +106,18 @@ interface LiveDataset {
   category: string;
   qualityScore: number | null;
   recordCount: number | null;
+  requestedTaskCount: number | null;
   status: string;
   downloadCount: number;
   accessType: string;
   adsRequired: number;
+  tags: string[];
+}
+
+function computeTier(accessType: string, adsRequired: number): "BASIC" | "MEDIUM" | "PREMIUM" {
+  if (accessType === "premium") return "PREMIUM";
+  if (adsRequired >= 5) return "MEDIUM";
+  return "BASIC";
 }
 
 export default function DatasetDetail() {
@@ -154,7 +162,9 @@ export default function DatasetDetail() {
   const adsRequired = isNumericId
     ? (liveDataset?.adsRequired ?? 3)
     : (staticDataset?.adsRequired ?? 3);
-  const tier = isNumericId ? "BASIC" : (staticDataset?.tier ?? "BASIC");
+  const tier = isNumericId
+    ? computeTier(liveDataset?.accessType ?? "ads", liveDataset?.adsRequired ?? 3)
+    : (staticDataset?.tier ?? "BASIC");
 
   const handleStartUnlock = () => {
     if (!client) {
@@ -248,8 +258,12 @@ export default function DatasetDetail() {
   const category = isNumericId ? (liveDataset?.category ?? "") : (staticDataset?.category ?? "");
   const rawQuality = isNumericId ? (liveDataset?.qualityScore ?? 0) : 0;
   const accuracyLabel = rawQuality > 0 ? `${Number(rawQuality).toFixed(1)}%` : "In revisione";
-  const samples = isNumericId ? (liveDataset?.recordCount?.toLocaleString() ?? "—") : (staticDataset?.samples ?? "—");
-  const tags = isNumericId ? [category.toLowerCase()] : (staticDataset?.tags ?? []);
+  const samples = isNumericId
+    ? ((liveDataset?.requestedTaskCount ?? liveDataset?.recordCount ?? 0) > 0
+        ? (liveDataset?.requestedTaskCount ?? liveDataset?.recordCount)!.toLocaleString() + " tasks"
+        : "—")
+    : (staticDataset?.samples ?? "—");
+  const tags = isNumericId ? (liveDataset?.tags ?? [category.toLowerCase()]) : (staticDataset?.tags ?? []);
   const formats = isNumericId ? ["CSV", "JSON"] : (staticDataset?.formats ?? ["CSV"]);
   const schema = isNumericId ? [
     { field: "id", type: "integer", description: "Task identifier" },

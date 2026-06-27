@@ -21,9 +21,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Header */}
         <header className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 bg-background/80 backdrop-blur-md border-b border-border/30">
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <Zap className="w-5 h-5 text-primary drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
-            </div>
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="PUTITUP" className="w-7 h-7 rounded-lg object-cover drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]" />
             <span className="font-black text-base tracking-tight uppercase bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               PUTITUP
             </span>

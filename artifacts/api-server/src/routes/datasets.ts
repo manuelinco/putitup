@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, ilike, and } from "drizzle-orm";
-import { db, datasetsTable, activityEventsTable, usersTable, tasksTable } from "@workspace/db";
+import { db, datasetsTable, activityEventsTable, usersTable, tasksTable, taskResponsesTable, rewardLedgerTable, lotteryDrawsTable } from "@workspace/db";
 import {
   ListDatasetsQueryParams,
   CreateDatasetBody,
@@ -352,6 +352,65 @@ router.patch("/datasets/:id", async (req, res): Promise<void> => {
   }
 
   res.json(dataset);
+});
+
+router.post("/datasets/:id/lottery/draw", async (req, res): Promise<void> => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, id));
+  if (!dataset) { res.status(404).json({ error: "Dataset not found" }); return; }
+  if (!dataset.lotteryPool || dataset.lotteryPool <= 0) {
+    res.status(400).json({ error: "Dataset has no lottery pool configured" }); return;
+  }
+  if (dataset.lotteryDrawnAt) {
+    res.status(409).json({ error: "Lottery already drawn for this dataset" }); return;
+  }
+
+  const contributors = await db
+    .select({ userId: taskResponsesTable.userId })
+    .from(taskResponsesTable)
+    .innerJoin(tasksTable, eq(taskResponsesTable.taskId, tasksTable.id))
+    .where(eq(tasksTable.datasetId, id))
+    .groupBy(taskResponsesTable.userId);
+
+  if (contributors.length === 0) {
+    res.status(400).json({ error: "No contributors for this dataset yet" }); return;
+  }
+
+  const winnerCount = Math.min(dataset.lotteryWinners ?? 1, contributors.length);
+  const indices = new Set<number>();
+  while (indices.size < winnerCount) {
+    indices.add(Math.floor(Math.random() * contributors.length));
+  }
+  const winnerUserIds = [...indices].map((i) => contributors[i]!.userId);
+  const prizePerWinner = dataset.lotteryPool / winnerCount;
+
+  const winnerDetails: { userId: number; username: string; amountTon: number }[] = [];
+  for (const userId of winnerUserIds) {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    await db.insert(rewardLedgerTable).values({
+      userId,
+      datasetId: id,
+      role: "lottery_winner",
+      rewardType: "lottery",
+      amountTon: prizePerWinner,
+      pointsValue: Math.round(prizePerWinner * 1_000_000),
+      status: "approved",
+    });
+    winnerDetails.push({ userId, username: user?.username ?? `user#${userId}`, amountTon: prizePerWinner });
+  }
+
+  await db.insert(lotteryDrawsTable).values({
+    datasetId: id,
+    prizePoolTon: dataset.lotteryPool,
+    winnersCount: winnerCount,
+    winners: winnerUserIds,
+    totalContributors: contributors.length,
+  });
+  await db.update(datasetsTable).set({ lotteryDrawnAt: new Date() }).where(eq(datasetsTable.id, id));
+
+  res.json({ prizePoolTon: dataset.lotteryPool, winnersCount: winnerCount, winners: winnerDetails, totalContributors: contributors.length });
 });
 
 router.post("/datasets/:id/download", async (req, res): Promise<void> => {
