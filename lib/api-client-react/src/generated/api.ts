@@ -19,6 +19,8 @@ import type {
 import type {
   ActivityEvent,
   AdTracking,
+  AdsChallengeBody,
+  AdsChallengeResult,
   AnalyticsSummary,
   CategoryCount,
   ConvertPointsBody,
@@ -2187,6 +2189,92 @@ export const useWatchAd = <
   TContext
 > => {
   return useMutation(getWatchAdMutationOptions(options));
+};
+
+/**
+ * @summary Issue a signed anti-bot challenge token before showing a rewarded ad
+ */
+export const getAdsChallengeUrl = () => {
+  return `/api/ads/challenge`;
+};
+
+export const adsChallenge = async (
+  adsChallengeBody?: AdsChallengeBody,
+  options?: RequestInit,
+): Promise<AdsChallengeResult> => {
+  return customFetch<AdsChallengeResult>(getAdsChallengeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adsChallengeBody),
+  });
+};
+
+export const getAdsChallengeMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adsChallenge>>,
+    TError,
+    { data: BodyType<AdsChallengeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adsChallenge>>,
+  TError,
+  { data: BodyType<AdsChallengeBody> },
+  TContext
+> => {
+  const mutationKey = ["adsChallenge"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adsChallenge>>,
+    { data: BodyType<AdsChallengeBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adsChallenge(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdsChallengeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adsChallenge>>
+>;
+export type AdsChallengeMutationBody = BodyType<AdsChallengeBody>;
+export type AdsChallengeMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Issue a signed anti-bot challenge token before showing a rewarded ad
+ */
+export const useAdsChallenge = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adsChallenge>>,
+    TError,
+    { data: BodyType<AdsChallengeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adsChallenge>>,
+  TError,
+  { data: BodyType<AdsChallengeBody> },
+  TContext
+> => {
+  return useMutation(getAdsChallengeMutationOptions(options));
 };
 
 /**

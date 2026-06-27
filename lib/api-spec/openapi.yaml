@@ -571,6 +571,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/WatchAdResult"
 
+  /ads/challenge:
+    post:
+      operationId: adsChallenge
+      tags: [ads]
+      summary: Issue a signed anti-bot challenge token before showing a rewarded ad
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdsChallengeBody"
+      responses:
+        "200":
+          description: Signed challenge token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdsChallengeResult"
+
   /ads/tracking/{userId}:
     get:
       operationId: getAdTracking
@@ -1083,7 +1102,29 @@ components:
           enum: [rewarded, unlock]
         datasetId:
           type: ["integer", "null"]
+        completionToken:
+          type: string
+          description: Signed token issued by /ads/challenge, proving the human check + ad watch
+        durationSeconds:
+          type: number
+          description: Client-measured ad watch duration (telemetry; server also derives elapsed from the token)
       required: [userId, adType]
+
+    AdsChallengeBody:
+      type: object
+      properties:
+        userId:
+          type: integer
+          description: Optional; the server resolves the user from the session token
+
+    AdsChallengeResult:
+      type: object
+      properties:
+        challengeToken:
+          type: string
+        expiresAt:
+          type: integer
+      required: [challengeToken, expiresAt]
 
     WatchAdResult:
       type: object
@@ -1099,6 +1140,13 @@ components:
         adsWatchedToday:
           type: integer
         dailyCapReached:
+          type: boolean
+        reason:
+          type: string
+          description: When success is false — blocked | cooldown | daily_cap | invalid_completion
+        riskScore:
+          type: integer
+        blocked:
           type: boolean
       required: [success, energyRestored, pointsEarned, datasetUnlocked, adsWatchedToday, dailyCapReached]
 

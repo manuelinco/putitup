@@ -61,7 +61,7 @@ function suppliedIds(req: Request, paramName?: string): number[] {
   return out;
 }
 
-function makeRequireUser(paramName?: string) {
+function makeRequireUser(paramName?: string, forceStrict = false) {
   return function requireUserMw(
     req: Request,
     res: Response,
@@ -85,7 +85,7 @@ function makeRequireUser(paramName?: string) {
       return;
     }
 
-    if (STRICT) {
+    if (STRICT || forceStrict) {
       res.status(401).json({ error: "Authentication required" });
       return;
     }
@@ -99,6 +99,14 @@ function makeRequireUser(paramName?: string) {
 
 /** Guard for routes that carry userId in the body / query / X-User-Id header. */
 export const requireUser = makeRequireUser();
+
+/**
+ * Strict guard for reward-bearing routes (ad challenge / watch / tracking): a
+ * valid session token is ALWAYS required, regardless of the global AUTH_ENFORCE
+ * soft rollout. Closes the soft-mode hole where a body `userId` alone could mint
+ * an ad-challenge token or claim a reward without proving identity.
+ */
+export const requireUserStrict = makeRequireUser(undefined, true);
 
 /** Guard factory for routes that carry userId in a path param. */
 export function requireUserParam(paramName: string) {

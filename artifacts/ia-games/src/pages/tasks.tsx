@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
 import { useTelegramHaptic } from "@/hooks/useTelegram";
 import { Layout } from "@/components/layout";
-import { AdChallenge } from "@/components/ad-challenge";
+import { RewardedAdFlow } from "@/components/rewarded-ad-flow";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -194,29 +194,42 @@ export default function Tasks() {
     }
   };
 
-  const handleAdComplete = async () => {
+  // The reward is granted server-side inside RewardedAdFlow (POST /ads/watch).
+  const handleAdComplete = () => {
     setShowAdChallenge(false);
     setAdPending(false);
-    try {
-      await watchAd.mutateAsync({ data: { userId, adType: "rewarded" } });
-      refetchStats();
-      refreshUser();
-      notification("success");
-      refetchTask();
-    } catch {
-      notification("error");
-      setSubmitError("Ricarica energia non riuscita — riprova tra poco.");
-    }
+    refetchStats();
+    refreshUser();
+    notification("success");
+    refetchTask();
   };
 
-  // Anti-bot penalty: drain energy + 90s cooldown before next ad (persists across refreshes)
-  const handleAdFail = () => {
-    setShowAdChallenge(false);
-    notification("error");
+  // Anti-bot penalty: 90s cooldown before next ad (persists across refreshes)
+  const applyBotPenalty = () => {
     const until = Date.now() + 90_000;
     try { localStorage.setItem(BOT_PENALTY_KEY, String(until)); } catch {}
     setBotPenaltyUntil(until);
     setBotCooldownSec(90);
+  };
+
+  const handleAdFail = (reason: string) => {
+    setShowAdChallenge(false);
+    notification("error");
+    switch (reason) {
+      case "cooldown":
+        setSubmitError("Aspetta qualche secondo prima del prossimo annuncio.");
+        break;
+      case "daily_cap":
+        setSubmitError("Hai raggiunto il limite giornaliero di annunci.");
+        break;
+      case "blocked":
+        setSubmitError("Il tuo account è sotto revisione anti-bot. Contatta il supporto.");
+        applyBotPenalty();
+        break;
+      default:
+        // human_failed / invalid_completion / error -> bot-like, apply penalty
+        applyBotPenalty();
+    }
   };
 
   // Countdown ticker for bot penalty
@@ -247,13 +260,14 @@ export default function Tasks() {
 
   return (
     <Layout>
-      {showAdChallenge && (
-        <AdChallenge
-          onComplete={handleAdComplete}
-          onFail={handleAdFail}
-          rewardText="+50 Energy"
-        />
-      )}
+      <RewardedAdFlow
+        open={showAdChallenge}
+        userId={userId}
+        adType="rewarded"
+        onComplete={handleAdComplete}
+        onFail={handleAdFail}
+        rewardText="+20 Energy"
+      />
 
       <div className="p-4 space-y-3">
         {/* Stats row */}

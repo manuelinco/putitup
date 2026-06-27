@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, clientsTable, datasetsTable, datasetAccessTable, clientSessionsTable } from "@workspace/db";
 import { pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from "crypto";
-import { verifyAdChallengeToken } from "./auth";
+import { verifyAdChallengeToken } from "../lib/adChallenge";
 
 const SESSION_SECRET = (() => {
   const s = process.env["SESSION_SECRET"];
@@ -279,7 +279,7 @@ router.post("/clients/:id/ads/watch", async (req, res): Promise<void> => {
   const adsWatchedToday = isNewDay ? 0 : client.adsWatchedToday;
   const lastAdAt = client.lastAdAt ? new Date(client.lastAdAt).getTime() : 0;
   const seconds = Number(durationSeconds ?? 0);
-  const tokenValid = typeof completionToken === "string" && verifyAdChallengeToken(completionToken, id);
+  const tokenValid = verifyAdChallengeToken(completionToken, "client", id).valid;
   const completed = tokenValid && seconds >= 15;
   const tooFast = lastAdAt > 0 && now.getTime() - lastAdAt < AD_COOLDOWN_MS;
   const capReached = adsWatchedToday >= CLIENT_DAILY_AD_CAP;

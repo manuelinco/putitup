@@ -6,13 +6,12 @@ import {
   useGetDailyMissions,
   useGetAdTracking,
   useConvertPoints,
-  useRechargeEnergy,
   getGetUserStatsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/auth";
 import { Layout } from "@/components/layout";
-import { AdChallenge } from "@/components/ad-challenge";
+import { RewardedAdFlow } from "@/components/rewarded-ad-flow";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,7 +70,6 @@ export default function Profile() {
   const { data: adTracking } = useGetAdTracking(userId, { query: { enabled: !!userId } as any });
 
   const convertPoints = useConvertPoints();
-  const rechargeEnergy = useRechargeEnergy();
 
   const [rewards, setRewards] = useState<RewardsData | null>(null);
   const [showAdChallenge, setShowAdChallenge] = useState(false);
@@ -125,9 +123,9 @@ export default function Profile() {
     refreshUser();
   };
 
-  const handleAdComplete = async () => {
+  // Reward granted server-side inside RewardedAdFlow (POST /ads/watch).
+  const handleAdComplete = () => {
     setShowAdChallenge(false);
-    await rechargeEnergy.mutateAsync({ data: { userId, method: "ad" } });
     queryClient.invalidateQueries({ queryKey: getGetUserStatsQueryKey(userId) });
     refreshUser();
   };
@@ -164,13 +162,14 @@ export default function Profile() {
 
   return (
     <Layout>
-      {showAdChallenge && (
-        <AdChallenge
-          onComplete={handleAdComplete}
-          onFail={handleAdFail}
-          rewardText="+50 Energy"
-        />
-      )}
+      <RewardedAdFlow
+        open={showAdChallenge}
+        userId={userId}
+        adType="rewarded"
+        onComplete={handleAdComplete}
+        onFail={handleAdFail}
+        rewardText="+20 Energy"
+      />
 
       <div className="p-4 space-y-4 pb-6">
         {/* Profile header */}
@@ -251,10 +250,10 @@ export default function Profile() {
                 variant="outline" size="sm"
                 className="w-full text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
                 onClick={() => setShowAdChallenge(true)}
-                disabled={rechargeEnergy.isPending || currentEnergy >= currentMaxEnergy}
+                disabled={showAdChallenge || currentEnergy >= currentMaxEnergy}
               >
                 <Zap className="w-3 h-3 mr-1" />
-                Watch ad to recharge (+50)
+                Watch ad to recharge (+20)
               </Button>
             </CardContent>
           </Card>

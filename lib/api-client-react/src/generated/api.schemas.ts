@@ -45,6 +45,12 @@ export interface CreateUserBody {
   avatarUrl?: string | null;
 }
 
+export interface RelabelTaskBody {
+  /** @minItems 2 */
+  newOptions: string[];
+  notes?: string;
+}
+
 export interface UpdateUserBody {
   username?: string;
   /** @nullable */
@@ -87,6 +93,8 @@ export const TaskType = {
   image: "image",
   text: "text",
   classification: "classification",
+  audio: "audio",
+  video: "video",
 } as const;
 
 /**
@@ -128,6 +136,8 @@ export const CreateTaskBodyType = {
   image: "image",
   text: "text",
   classification: "classification",
+  audio: "audio",
+  video: "video",
 } as const;
 
 export type CreateTaskBodyDataPayload = { [key: string]: unknown };
@@ -310,6 +320,20 @@ export interface WatchAdBody {
   adType: WatchAdBodyAdType;
   /** @nullable */
   datasetId?: number | null;
+  /** Signed token issued by /ads/challenge, proving the human check + ad watch */
+  completionToken?: string;
+  /** Client-measured ad watch duration (telemetry; server also derives elapsed from the token) */
+  durationSeconds?: number;
+}
+
+export interface AdsChallengeBody {
+  /** Optional; the server resolves the user from the session token */
+  userId?: number;
+}
+
+export interface AdsChallengeResult {
+  challengeToken: string;
+  expiresAt: number;
 }
 
 export interface WatchAdResult {
@@ -319,6 +343,10 @@ export interface WatchAdResult {
   datasetUnlocked: boolean;
   adsWatchedToday: number;
   dailyCapReached: boolean;
+  /** When success is false — blocked | cooldown | daily_cap | invalid_completion */
+  reason?: string;
+  riskScore?: number;
+  blocked?: boolean;
 }
 
 export interface AdTracking {
@@ -465,6 +493,8 @@ export const ListTasksType = {
   image: "image",
   text: "text",
   classification: "classification",
+  audio: "audio",
+  video: "video",
 } as const;
 
 export type ListTasksDifficulty =

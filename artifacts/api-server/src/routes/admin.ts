@@ -10,6 +10,7 @@ import {
   rewardLedgerTable,
   pendingPaymentsTable,
   lotteryDrawsTable,
+  adsTrackingTable,
 } from "@workspace/db";
 import { requireAdmin } from "../middleware/requireAdmin";
 
@@ -275,6 +276,72 @@ router.post("/admin/tasks/batch", requireAdmin, async (req, res): Promise<void> 
 
   const created = await db.insert(tasksTable).values(rows).returning({ id: tasksTable.id });
   res.status(201).json({ created: created.length, ids: created.map((t) => t.id) });
+});
+
+const RISK_BLOCK = 100;
+
+/**
+ * GET /api/admin/bot-watch
+ * Lists users by anti-bot risk (highest first) so an admin can monitor and
+ * manage suspected bots. Joins users with their ad-tracking record.
+ */
+router.get("/admin/bot-watch", requireAdmin, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      userId: usersTable.id,
+      username: usersTable.username,
+      telegramId: usersTable.telegramId,
+      riskScore: adsTrackingTable.riskScore,
+      suspiciousCount: adsTrackingTable.suspiciousCount,
+      cooldownUntil: adsTrackingTable.cooldownUntil,
+      lastViewTime: adsTrackingTable.lastViewTime,
+      adsWatchedToday: adsTrackingTable.adsWatchedToday,
+      totalAdsWatched: adsTrackingTable.totalAdsWatched,
+    })
+    .from(adsTrackingTable)
+    .innerJoin(usersTable, eq(adsTrackingTable.userId, usersTable.id))
+    .orderBy(desc(adsTrackingTable.riskScore), desc(adsTrackingTable.suspiciousCount))
+    .limit(100);
+
+  res.json(rows.map((r) => ({ ...r, blocked: r.riskScore >= RISK_BLOCK })));
+});
+
+/**
+ * PATCH /api/admin/users/:id/block
+ * Body: { block: boolean }
+ * Manually block (risk -> 100) or clear (risk -> 0, reset cooldown/suspicious) a user.
+ */
+router.patch("/admin/users/:id/block", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const block = Boolean(req.body?.block);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid user ID" });
+    return;
+  }
+
+  const now = new Date();
+  let [rec] = await db
+    .select()
+    .from(adsTrackingTable)
+    .where(eq(adsTrackingTable.userId, id));
+  if (!rec) {
+    [rec] = await db
+      .insert(adsTrackingTable)
+      .values({ userId: id, lastResetDate: now })
+      .returning();
+  }
+
+  const [updated] = await db
+    .update(adsTrackingTable)
+    .set({
+      riskScore: block ? RISK_BLOCK : 0,
+      suspiciousCount: block ? rec.suspiciousCount : 0,
+      cooldownUntil: block ? new Date(now.getTime() + 3_600_000) : null,
+    })
+    .where(eq(adsTrackingTable.userId, id))
+    .returning();
+
+  res.json({ success: true, userId: id, blocked: block, tracking: updated });
 });
 
 export default router;

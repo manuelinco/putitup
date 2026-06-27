@@ -160,7 +160,9 @@ export const listTasksQueryLimitDefault = 10;
 export const listTasksQueryOffsetDefault = 0;
 
 export const ListTasksQueryParams = zod.object({
-  type: zod.enum(["image", "text", "classification"]).optional(),
+  type: zod
+    .enum(["image", "text", "classification", "audio", "video"])
+    .optional(),
   difficulty: zod.enum(["easy", "medium", "hard"]).optional(),
   limit: zod.coerce.number().default(listTasksQueryLimitDefault),
   offset: zod.coerce.number().default(listTasksQueryOffsetDefault),
@@ -168,7 +170,7 @@ export const ListTasksQueryParams = zod.object({
 
 export const ListTasksResponseItem = zod.object({
   id: zod.number(),
-  type: zod.enum(["image", "text", "classification"]),
+  type: zod.enum(["image", "text", "classification", "audio", "video"]),
   dataPayload: zod
     .object({})
     .passthrough()
@@ -190,7 +192,7 @@ export const createTaskBodyPointsRewardDefault = 10;
 export const createTaskBodyIsGoldenDefault = false;
 
 export const CreateTaskBody = zod.object({
-  type: zod.enum(["image", "text", "classification"]),
+  type: zod.enum(["image", "text", "classification", "audio", "video"]),
   dataPayload: zod.object({}).passthrough(),
   correctAnswer: zod.string().nullish(),
   difficulty: zod.enum(["easy", "medium", "hard"]),
@@ -203,7 +205,7 @@ export const CreateTaskBody = zod.object({
  */
 export const GetRelabelBasketResponseItem = zod.object({
   id: zod.number(),
-  type: zod.enum(["image", "text", "classification"]),
+  type: zod.enum(["image", "text", "classification", "audio", "video"]),
   dataPayload: zod
     .object({})
     .passthrough()
@@ -241,7 +243,7 @@ export const GetTaskParams = zod.object({
 
 export const GetTaskResponse = zod.object({
   id: zod.number(),
-  type: zod.enum(["image", "text", "classification"]),
+  type: zod.enum(["image", "text", "classification", "audio", "video"]),
   dataPayload: zod
     .object({})
     .passthrough()
@@ -264,7 +266,7 @@ export const GetNextTaskQueryParams = zod.object({
 
 export const GetNextTaskResponse = zod.object({
   id: zod.number(),
-  type: zod.enum(["image", "text", "classification"]),
+  type: zod.enum(["image", "text", "classification", "audio", "video"]),
   dataPayload: zod
     .object({})
     .passthrough()
@@ -524,6 +526,18 @@ export const WatchAdBody = zod.object({
   userId: zod.number(),
   adType: zod.enum(["rewarded", "unlock"]),
   datasetId: zod.number().nullish(),
+  completionToken: zod
+    .string()
+    .optional()
+    .describe(
+      "Signed token issued by \/ads\/challenge, proving the human check + ad watch",
+    ),
+  durationSeconds: zod
+    .number()
+    .optional()
+    .describe(
+      "Client-measured ad watch duration (telemetry; server also derives elapsed from the token)",
+    ),
 });
 
 export const WatchAdResponse = zod.object({
@@ -533,6 +547,29 @@ export const WatchAdResponse = zod.object({
   datasetUnlocked: zod.boolean(),
   adsWatchedToday: zod.number(),
   dailyCapReached: zod.boolean(),
+  reason: zod
+    .string()
+    .optional()
+    .describe(
+      "When success is false — blocked | cooldown | daily_cap | invalid_completion",
+    ),
+  riskScore: zod.number().optional(),
+  blocked: zod.boolean().optional(),
+});
+
+/**
+ * @summary Issue a signed anti-bot challenge token before showing a rewarded ad
+ */
+export const AdsChallengeBody = zod.object({
+  userId: zod
+    .number()
+    .optional()
+    .describe("Optional; the server resolves the user from the session token"),
+});
+
+export const AdsChallengeResponse = zod.object({
+  challengeToken: zod.string(),
+  expiresAt: zod.number(),
 });
 
 /**

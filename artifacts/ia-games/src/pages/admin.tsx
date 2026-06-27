@@ -26,14 +26,23 @@ import {
   BarChart2,
   ClipboardList,
   Download,
+  ShieldAlert,
+  Ban,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE } from "@/lib/api";
+import { getSessionToken } from "@/lib/session";
 
 async function apiFetch(path: string, options?: RequestInit) {
+  const token = getSessionToken();
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers ?? {}),
+    },
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);
@@ -90,7 +99,20 @@ interface PendingPayment {
   } | null;
 }
 
-type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer" | "lottery";
+type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer" | "lottery" | "botwatch";
+
+interface BotWatchRow {
+  userId: number;
+  username: string;
+  telegramId: string | null;
+  riskScore: number;
+  suspiciousCount: number;
+  cooldownUntil: string | null;
+  lastViewTime: string | null;
+  adsWatchedToday: number;
+  totalAdsWatched: number;
+  blocked: boolean;
+}
 
 export default function Admin() {
   const { data: analytics } = useGetAnalyticsSummary();
@@ -115,6 +137,10 @@ export default function Admin() {
   const [lotteryLoading, setLotteryLoading] = useState(false);
   const [drawingLottery, setDrawingLottery] = useState<number | null>(null);
   const [lotteryResults, setLotteryResults] = useState<Record<number, {winners: {userId: number; username: string; amountTon: number}[]; prizePoolTon: number} | null>>({});
+
+  const [botWatch, setBotWatch] = useState<BotWatchRow[]>([]);
+  const [botWatchLoading, setBotWatchLoading] = useState(false);
+  const [botWatchBusy, setBotWatchBusy] = useState<number | null>(null);
 
   const [batchTasks, setBatchTasks] = useState<TaskEntry[]>([emptyTask()]);
   const [currentTask, setCurrentTask] = useState<TaskEntry>(emptyTask());
@@ -166,6 +192,31 @@ export default function Admin() {
   useEffect(() => {
     if (activeSection === "payments") loadPendingPayments();
   }, [activeSection]);
+
+  const loadBotWatch = async () => {
+    setBotWatchLoading(true);
+    try {
+      const data = await apiFetch("/api/admin/bot-watch");
+      setBotWatch(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+    setBotWatchLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeSection === "botwatch") loadBotWatch();
+  }, [activeSection]);
+
+  const handleToggleBlock = async (userId: number, block: boolean) => {
+    setBotWatchBusy(userId);
+    try {
+      await apiFetch(`/api/admin/users/${userId}/block`, {
+        method: "PATCH",
+        body: JSON.stringify({ block }),
+      });
+      await loadBotWatch();
+    } catch { /* ignore */ }
+    setBotWatchBusy(null);
+  };
 
   const handleMarkPaid = async (paymentId: number) => {
     setMarkingPaid(paymentId);
@@ -340,6 +391,7 @@ export default function Admin() {
     { id: "users", label: "Utenti", icon: Users },
     { id: "lottery", label: "Lottery", icon: Trophy },
     { id: "minipimer", label: "Minipimer", icon: Download },
+    { id: "botwatch", label: "Bot Watch", icon: ShieldAlert },
   ];
 
   return (
@@ -1055,6 +1107,119 @@ export default function Admin() {
               ))}
             </CardContent>
           </Card>
+        )}
+
+        {/* ─── BOT WATCH ─────────────────────────────────── */}
+        {activeSection === "botwatch" && (
+          <div className="space-y-3">
+            <Card className="border-red-500/30 bg-red-500/5">
+              <CardHeader className="p-3 pb-2 flex-row items-center justify-between">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                  Anti-Bot Monitor
+                </CardTitle>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={loadBotWatch}>
+                  Aggiorna
+                </Button>
+              </CardHeader>
+              <CardContent className="p-3 pt-0">
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Punteggio di rischio per utente in base al comportamento sugli annunci.
+                  A <span className="font-bold text-red-400">100</span> l'utente è bloccato e non guadagna finché non lo sblocchi.
+                </p>
+              </CardContent>
+            </Card>
+
+            {botWatchLoading && <Skeleton className="h-32 w-full rounded-xl" />}
+
+            {!botWatchLoading && botWatch.length === 0 && (
+              <Card className="border-border/30">
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  Nessuna attività sugli annunci registrata.
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="space-y-2">
+              {botWatch.map((row) => {
+                const cooldownActive = row.cooldownUntil ? new Date(row.cooldownUntil).getTime() > Date.now() : false;
+                const riskColor = row.riskScore >= 100
+                  ? "text-red-400 border-red-400/50 bg-red-400/10"
+                  : row.riskScore >= 50
+                    ? "text-yellow-400 border-yellow-400/50 bg-yellow-400/10"
+                    : "text-secondary border-secondary/40 bg-secondary/10";
+                return (
+                  <Card key={row.userId} className={cn("border", row.blocked ? "border-red-500/50 bg-red-500/5" : "border-border/30")}>
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold truncate">{row.username}</p>
+                            {row.blocked && (
+                              <Badge variant="outline" className="text-[9px] text-red-400 border-red-400/50 bg-red-400/10">
+                                BLOCCATO
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground font-mono">
+                            id {row.userId} · tg {row.telegramId ?? "—"}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className={cn("text-[10px] font-black shrink-0", riskColor)}>
+                          RISK {row.riskScore}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 mt-2 text-center">
+                        <div className="rounded-md bg-muted/20 p-1.5">
+                          <p className="text-[9px] text-muted-foreground uppercase">Sospetti</p>
+                          <p className="text-sm font-bold">{row.suspiciousCount}</p>
+                        </div>
+                        <div className="rounded-md bg-muted/20 p-1.5">
+                          <p className="text-[9px] text-muted-foreground uppercase">Oggi</p>
+                          <p className="text-sm font-bold">{row.adsWatchedToday}</p>
+                        </div>
+                        <div className="rounded-md bg-muted/20 p-1.5">
+                          <p className="text-[9px] text-muted-foreground uppercase">Totali</p>
+                          <p className="text-sm font-bold">{row.totalAdsWatched}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-[10px] text-muted-foreground">
+                          {cooldownActive ? "In pausa (cooldown)" : "Attivo"}
+                          {row.lastViewTime ? ` · ultimo ${new Date(row.lastViewTime).toLocaleTimeString()}` : ""}
+                        </p>
+                        {row.blocked ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs text-secondary border-secondary/40"
+                            disabled={botWatchBusy === row.userId}
+                            onClick={() => handleToggleBlock(row.userId, false)}
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                            Sblocca
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs text-red-400 border-red-400/40"
+                            disabled={botWatchBusy === row.userId}
+                            onClick={() => handleToggleBlock(row.userId, true)}
+                          >
+                            <Ban className="w-3.5 h-3.5 mr-1" />
+                            Blocca
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </Layout>
