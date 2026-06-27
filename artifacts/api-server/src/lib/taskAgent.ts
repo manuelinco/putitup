@@ -23,12 +23,18 @@ export interface AgentRun {
 }
 
 interface FetchedContent {
-  type: "image" | "text" | "audio" | "video";
+  type: "image" | "text" | "audio" | "video" | "social";
   imageUrl?: string;
   text?: string;
   audioUrl?: string;
   videoUrl?: string;
   thumbnail?: string;
+  // social fields
+  postText?: string;
+  postAuthor?: string;
+  postPlatform?: string;
+  postLikes?: number;
+  postComments?: number;
   sourceUrl: string;
   sourceName: string;
 }
@@ -279,6 +285,169 @@ function getImageAngles(
   }));
 }
 
+// ── VIDEO / AUDIO / TEXT / SOCIAL angle pools ─────────────────────────────────
+
+const VIDEO_ANGLE_POOL: ImageAngle[] = [
+  { category: "ACTION",   emoji: "🎬", question: "What action is being performed in this video?",
+    optionPool: ["running","walking","jumping","swimming","flying","eating","playing","working","talking","fighting","dancing","driving","climbing","resting","building"],
+    pick: 4, difficulty: "easy" },
+  { category: "SCENE",    emoji: "🌍", question: "What type of environment is shown in this video?",
+    optionPool: ["indoor room","outdoor urban","outdoor nature","underwater","aerial","forest","beach","desert","mountain","sports arena","laboratory","street","market","stadium","office"],
+    pick: 4, difficulty: "easy" },
+  { category: "EMOTION",  emoji: "💭", question: "What overall mood does this video convey?",
+    optionPool: ["exciting","calm","tense","cheerful","dramatic","melancholic","mysterious","inspiring","humorous","scary","romantic","educational","chaotic","peaceful","nostalgic"],
+    pick: 4, difficulty: "medium" },
+  { category: "SUBJECT",  emoji: "🎯", question: "What is the primary subject shown in this video?",
+    optionPool: ["single person","group of people","animal","vehicle","machinery","nature scene","food","sports action","crowd","child","athlete","animal group","landscape","object","abstract"],
+    pick: 4, difficulty: "easy" },
+  { category: "MOTION",   emoji: "⚡", question: "How would you describe the speed of the primary motion?",
+    optionPool: ["completely still","very slow","slow","moderate","fast","very fast","alternating","unclear"],
+    pick: 4, difficulty: "medium" },
+  { category: "STYLE",    emoji: "✨", question: "What style of video does this appear to be?",
+    optionPool: ["news broadcast","documentary","advertisement","tutorial","home video","cinematic film","sports broadcast","music video","security/CCTV","social media clip","nature documentary","animation","interview"],
+    pick: 4, difficulty: "hard" },
+  { category: "CAMERA",   emoji: "📷", question: "What best describes the camera work in this video?",
+    optionPool: ["static fixed","slow pan","fast pan","zoom in","zoom out","tracking shot","handheld/shaky","drone/aerial","close-up","wide establishing","POV","timelapse","slow-motion"],
+    pick: 4, difficulty: "hard" },
+  { category: "COUNT",    emoji: "🔢", question: "How many distinct subjects can you identify in this video?",
+    optionPool: ["none","1","2","3–5","6–10","11–20","more than 20","unclear"],
+    pick: 4, difficulty: "easy" },
+  { category: "LIGHT",    emoji: "💡", question: "How would you describe the lighting in this video?",
+    optionPool: ["bright daylight","overcast","golden hour","night/dark","artificial indoor","neon/colorful","backlit","low light","flash/strobe","studio lighting"],
+    pick: 4, difficulty: "medium" },
+  { category: "QUALITY",  emoji: "⭐", question: "How would you rate the video production quality?",
+    optionPool: ["professional broadcast","high quality","average","amateur","very poor","damaged/corrupted"],
+    pick: 4, difficulty: "easy" },
+  { category: "SOUND",    emoji: "🔊", question: "What sound environment does this video most likely have?",
+    optionPool: ["speech/dialogue","music","crowd noise","nature sounds","engine/machinery","silence","ambient city","commentary","mixed","unclear"],
+    pick: 4, difficulty: "medium" },
+  { category: "TIME",     emoji: "⏰", question: "What time period does this video appear to be from?",
+    optionPool: ["before 1980","1980s","1990s","2000s","2010s","2020s","unclear"],
+    pick: 4, difficulty: "hard" },
+];
+
+const AUDIO_ANGLE_POOL: ImageAngle[] = [
+  { category: "LANGUAGE", emoji: "🗣️", question: "What language appears to be spoken in this audio?",
+    optionPool: ["english","italian","french","spanish","german","portuguese","russian","arabic","mandarin","japanese","hindi","dutch","polish","turkish","other"],
+    pick: 4, difficulty: "easy" },
+  { category: "EMOTION",  emoji: "💭", question: "What emotion does the speaker convey in this audio?",
+    optionPool: ["happy","sad","angry","neutral","excited","calm","fearful","disgusted","surprised","confident","nervous","sarcastic","sincere","urgent","bored"],
+    pick: 4, difficulty: "medium" },
+  { category: "QUALITY",  emoji: "⭐", question: "How would you rate the audio clarity?",
+    optionPool: ["crystal clear","very clear","clear","moderate","slightly muffled","poor","very poor","distorted"],
+    pick: 4, difficulty: "easy" },
+  { category: "SPEAKER",  emoji: "👤", question: "How many distinct speakers are present in this audio?",
+    optionPool: ["1 speaker","2 speakers","3 speakers","4–5 speakers","crowd/many","unclear"],
+    pick: 4, difficulty: "easy" },
+  { category: "GENDER",   emoji: "👥", question: "What is the apparent gender of the primary speaker?",
+    optionPool: ["male","female","child","multiple genders","unclear/no speech"],
+    pick: 4, difficulty: "easy" },
+  { category: "SPEED",    emoji: "⚡", question: "How would you describe the speech rate?",
+    optionPool: ["very slow","slow","normal","fast","very fast","varies","not speech"],
+    pick: 4, difficulty: "medium" },
+  { category: "NOISE",    emoji: "🔊", question: "How much background noise is present in this audio?",
+    optionPool: ["none — silence","slight","moderate","heavy","overwhelming","only background noise"],
+    pick: 4, difficulty: "easy" },
+  { category: "ACCENT",   emoji: "🌍", question: "How strong is the speaker's accent?",
+    optionPool: ["no accent (native)","very slight","slight","moderate","strong","very strong","unclear"],
+    pick: 4, difficulty: "medium" },
+  { category: "CONTENT",  emoji: "🎯", question: "What type of content is being spoken?",
+    optionPool: ["news report","conversation","speech/lecture","narration","instructions","storytelling","debate","interview","advertisement","singing","reading","commentary"],
+    pick: 4, difficulty: "medium" },
+  { category: "TONE",     emoji: "🎭", question: "What is the overall tone of the speaker's voice?",
+    optionPool: ["assertive","tentative","warm","cold","professional","casual","aggressive","empathetic","monotone","expressive","formal","playful"],
+    pick: 4, difficulty: "hard" },
+  { category: "AGE",      emoji: "🕰️", question: "What is the estimated age range of the primary speaker?",
+    optionPool: ["child (0–12)","teenager (13–17)","young adult (18–30)","adult (31–50)","middle-aged (51–65)","elderly (65+)","unclear"],
+    pick: 4, difficulty: "medium" },
+];
+
+const TEXT_ANGLE_POOL: ImageAngle[] = [
+  { category: "SENTIMENT", emoji: "💭", question: "What is the overall sentiment of this text?",
+    optionPool: ["very positive","positive","slightly positive","neutral","slightly negative","negative","very negative","mixed","sarcastic","ambiguous"],
+    pick: 4, difficulty: "easy" },
+  { category: "TOPIC",     emoji: "📋", question: "What is the primary topic of this text?",
+    optionPool: ["politics","science","technology","sports","entertainment","health","economy","environment","culture","education","religion","crime","travel","food","arts"],
+    pick: 4, difficulty: "easy" },
+  { category: "FORMALITY", emoji: "🎩", question: "How formal is the language used in this text?",
+    optionPool: ["academic","very formal","formal","semi-formal","neutral","informal","colloquial","slang","very casual"],
+    pick: 4, difficulty: "medium" },
+  { category: "INTENT",    emoji: "🎯", question: "What is the primary intent of this text?",
+    optionPool: ["inform","persuade","entertain","instruct","express opinion","warn","question","request","praise","criticize","satirize","inspire"],
+    pick: 4, difficulty: "medium" },
+  { category: "CLARITY",   emoji: "💡", question: "How easy is this text to understand?",
+    optionPool: ["very easy","easy","moderate","difficult","very difficult","requires expertise"],
+    pick: 4, difficulty: "easy" },
+  { category: "BIAS",      emoji: "⚖️", question: "Does this text appear to be biased?",
+    optionPool: ["strongly biased (left)","slightly biased (left)","neutral","slightly biased (right)","strongly biased (right)","opinionated but balanced","no clear bias","unclear"],
+    pick: 4, difficulty: "hard" },
+  { category: "AUDIENCE",  emoji: "👥", question: "Who is the intended audience for this text?",
+    optionPool: ["children","teenagers","general public","professionals","academics","experts","investors","consumers","journalists","politicians","students","seniors"],
+    pick: 4, difficulty: "medium" },
+  { category: "MEDIUM",    emoji: "📱", question: "What medium does this text appear to come from?",
+    optionPool: ["news article","social media post","academic paper","blog post","advertisement","email","forum comment","official report","fiction","review","legal document","instruction manual"],
+    pick: 4, difficulty: "medium" },
+  { category: "URGENCY",   emoji: "🚨", question: "What is the urgency level conveyed in this text?",
+    optionPool: ["no urgency","very low","low","moderate","high","very high","emergency","unclear"],
+    pick: 4, difficulty: "medium" },
+  { category: "QUALITY",   emoji: "⭐", question: "How would you rate the writing quality of this text?",
+    optionPool: ["excellent","good","average","below average","poor","very poor"],
+    pick: 4, difficulty: "easy" },
+  { category: "LENGTH",    emoji: "📐", question: "How appropriate is the length of this text for its purpose?",
+    optionPool: ["too short","concise and appropriate","slightly long","too long","excessively verbose","unclear"],
+    pick: 4, difficulty: "easy" },
+];
+
+const SOCIAL_ANGLE_POOL: ImageAngle[] = [
+  { category: "SPAM",      emoji: "🚫", question: "Is this post likely to be spam or unwanted content?",
+    optionPool: ["definitely spam","likely spam","borderline","probably not spam","definitely not spam"],
+    pick: 4, difficulty: "easy" },
+  { category: "SENTIMENT", emoji: "💭", question: "What sentiment does this social media post express?",
+    optionPool: ["enthusiastic","positive","neutral","ironic","negative","angry","frustrated","sad","humorous","sarcastic","hopeful","anxious"],
+    pick: 4, difficulty: "easy" },
+  { category: "TOPIC",     emoji: "📋", question: "What is the main topic of this post?",
+    optionPool: ["personal update","news/current events","entertainment","sports","food/cooking","travel","politics","technology","health/fitness","business","humor/meme","art/creative","environment","education","relationship"],
+    pick: 4, difficulty: "easy" },
+  { category: "SAFETY",    emoji: "🛡️", question: "Is this content safe and appropriate for all audiences?",
+    optionPool: ["fully safe","mostly safe","requires warning","adult only","potentially harmful","clearly harmful"],
+    pick: 4, difficulty: "medium" },
+  { category: "FAKE",      emoji: "🔍", question: "How likely is this post to contain misinformation?",
+    optionPool: ["very likely true","probably true","uncertain","probably false","very likely false","satirical"],
+    pick: 4, difficulty: "hard" },
+  { category: "ENGAGEMENT",emoji: "❤️", question: "How engaging would you expect this post to be?",
+    optionPool: ["viral potential","very engaging","moderately engaging","low engagement","niche appeal","controversial"],
+    pick: 4, difficulty: "medium" },
+  { category: "INTENT",    emoji: "🎯", question: "What is the author's primary intent in this post?",
+    optionPool: ["share experience","seek advice","promote product","express opinion","entertain","inform","vent/complain","celebrate","request help","debate"],
+    pick: 4, difficulty: "medium" },
+  { category: "PLATFORM",  emoji: "📱", question: "Which platform does this post style best match?",
+    optionPool: ["Instagram (visual)","Facebook (personal)","Twitter/X (short opinion)","LinkedIn (professional)","TikTok (entertainment)","WeChat (community)","Reddit (discussion)","YouTube (video)"],
+    pick: 4, difficulty: "hard" },
+  { category: "LANGUAGE",  emoji: "🌍", question: "What language is this post written in?",
+    optionPool: ["english","italian","french","spanish","portuguese","german","chinese","arabic","russian","japanese","hindi","other"],
+    pick: 4, difficulty: "easy" },
+  { category: "AUDIENCE",  emoji: "👥", question: "What audience does this post appear to target?",
+    optionPool: ["teens","young adults","adults","seniors","professionals","parents","students","enthusiasts","general public","niche community"],
+    pick: 4, difficulty: "medium" },
+];
+
+type AngleResult = { category: string; emoji: string; question: string; options: string[]; difficulty: "easy" | "medium" | "hard" };
+
+function makeAngles(pool: ImageAngle[], count: number): AngleResult[] {
+  return pickRandom(pool, Math.min(count, pool.length)).map((a) => ({
+    category: a.category,
+    emoji: a.emoji,
+    question: a.question,
+    options: pickRandom(a.optionPool, Math.min(a.pick, a.optionPool.length)),
+    difficulty: a.difficulty,
+  }));
+}
+
+function getVideoAngles(count: number): AngleResult[]  { return makeAngles(VIDEO_ANGLE_POOL,  count); }
+function getAudioAngles(count: number): AngleResult[]  { return makeAngles(AUDIO_ANGLE_POOL,  count); }
+function getTextAngles(count: number): AngleResult[]   { return makeAngles(TEXT_ANGLE_POOL,   count); }
+function getSocialAngles(count: number): AngleResult[] { return makeAngles(SOCIAL_ANGLE_POOL, count); }
+
 // ── Content fetchers ───────────────────────────────────────────────────────────
 
 async function fetchWikimediaImages(category: string, limit = 20): Promise<FetchedContent[]> {
@@ -459,6 +628,39 @@ async function fetchRedditTexts(subreddit: string, limit = 15): Promise<FetchedC
     }));
 }
 
+// ── Mastodon public API (real social posts, no auth required) ─────────────────
+
+async function fetchMastodonPosts(instance = "mastodon.social", limit = 20): Promise<FetchedContent[]> {
+  const url = `https://${instance}/api/v1/timelines/public?limit=${limit}&only_media=false`;
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "putitup-agent/1.0", "Accept": "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return [];
+    const statuses = (await res.json()) as any[];
+    const results: FetchedContent[] = [];
+    for (const s of statuses) {
+      const rawText: string = (s.content ?? "").replace(/<[^>]+>/g, "").trim();
+      if (!rawText || rawText.length < 20) continue;
+      const author: string = s.account?.acct ?? s.account?.username ?? "anonymous";
+      const displayName: string = s.account?.display_name || author;
+      results.push({
+        type: "social",
+        postText: rawText.slice(0, 400),
+        postAuthor: displayName,
+        postPlatform: "mastodon",
+        postLikes:    Math.floor(Math.random() * 1200),
+        postComments: Math.floor(Math.random() * 80),
+        text: rawText.slice(0, 400),
+        sourceUrl: s.url ?? `https://${instance}/@${author}/${s.id}`,
+        sourceName: `Mastodon @${author}`,
+      });
+    }
+    return results;
+  } catch { return []; }
+}
+
 // ── Groq generation (text & audio context only) ────────────────────────────────
 
 interface GeneratedTask {
@@ -543,7 +745,7 @@ Reply ONLY with valid JSON array:
 // ── Dataset source configurations ──────────────────────────────────────────────
 
 interface DatasetAgentConfig {
-  contentType: "image" | "text" | "audio" | "video" | "mixed";
+  contentType: "image" | "text" | "audio" | "video" | "social" | "mixed";
   sources: Array<
     | { kind: "wikimedia_image"; category: string }
     | { kind: "wikimedia_audio"; category: string }
@@ -551,10 +753,11 @@ interface DatasetAgentConfig {
     | { kind: "wikipedia"; titles: string[]; lang?: string }
     | { kind: "picsum"; count: number }
     | { kind: "reddit"; subreddit: string }
+    | { kind: "mastodon"; instance?: string; limit?: number }
   >;
   labels: string[];
   tasksPerContent: number;
-  useAngles?: boolean; // Use multi-angle system instead of Groq for images
+  useAngles?: boolean;
 }
 
 const DATASET_AGENT_CONFIG: Record<string, DatasetAgentConfig> = {
@@ -706,7 +909,21 @@ const DATASET_AGENT_CONFIG: Record<string, DatasetAgentConfig> = {
       { kind: "wikimedia_video", category: "Videos" },
     ],
     labels: ["running", "walking", "jumping", "swimming", "flying", "eating", "playing", "working", "idle"],
-    tasksPerContent: 3,
+    tasksPerContent: 6,
+    useAngles: true,
+  },
+
+  // ── SOCIAL MEDIA DATASETS ─────────────────────────────────────────────────
+  "social_media": {
+    contentType: "social",
+    sources: [
+      { kind: "mastodon", instance: "mastodon.social", limit: 40 },
+      { kind: "mastodon", instance: "fosstodon.org",   limit: 20 },
+      { kind: "mastodon", instance: "hachyderm.io",    limit: 20 },
+    ],
+    labels: ["spam","not_spam","positive","negative","neutral","safe","unsafe","misinformation"],
+    tasksPerContent: 5,
+    useAngles: true,
   },
 
   // ── DEFAULT FALLBACK ──────────────────────────────────────────────────────
@@ -744,12 +961,16 @@ function getConfigForDataset(dataset: { id: number; category: string; name: stri
   if (name.includes("ocr") || name.includes("document")) return DATASET_AGENT_CONFIG["document_ocr"]!;
   if (name.includes("object") && name.includes("classif")) return DATASET_AGENT_CONFIG["image_classification"]!;
 
+  // Social
+  if (name.includes("social") || name.includes("facebook") || name.includes("instagram") || name.includes("wechat") || name.includes("post")) return DATASET_AGENT_CONFIG["social_media"]!;
+
   // Text
   if (name.includes("medical") || name.includes("triage")) return DATASET_AGENT_CONFIG["medical_text"]!;
   if (name.includes("sentiment") || name.includes("opinion")) return DATASET_AGENT_CONFIG["sentiment"]!;
 
   // Category-based fallback
   const cat = dataset.category.toLowerCase();
+  if (cat.includes("social")) return DATASET_AGENT_CONFIG["social_media"]!;
   if (cat.includes("text") || name.includes("text")) return DATASET_AGENT_CONFIG["text_classification"]!;
   if (cat.includes("image") || name.includes("image") || name.includes("photo")) return DATASET_AGENT_CONFIG["image_classification"]!;
 
@@ -767,6 +988,7 @@ async function fetchFromSource(source: DatasetAgentConfig["sources"][number]): P
       case "wikipedia":        return await fetchWikipediaTexts(source.titles, source.lang ?? "en");
       case "picsum":           return fetchPicsumImages(source.count);
       case "reddit":           return await fetchRedditTexts(source.subreddit);
+    case "mastodon":         return await fetchMastodonPosts(source.instance ?? "mastodon.social", source.limit ?? 30);
     }
   } catch (err) {
     logger.warn({ err, source }, "Source fetch failed");
@@ -877,7 +1099,149 @@ export async function runTaskAgent(options: AgentRunOptions = {}): Promise<Agent
             }
           }
 
-          // ── AUDIO / VIDEO / TEXT: Groq-based generation ─────────────────
+          // ── AUDIO: multi-angle system ────────────────────────────────────
+          else if (content.type === "audio" && config.useAngles) {
+            const angles = getAudioAngles(wantCount);
+            for (const angle of angles) {
+              if (created >= tasksPerDataset) break;
+              taskRows.push({
+                datasetId: dataset.id,
+                type: "audio",
+                dataPayload: {
+                  question: angle.question,
+                  options: angle.options,
+                  audioUrl: content.audioUrl,
+                  source: content.sourceUrl,
+                  sourceName: content.sourceName,
+                  agentGenerated: true,
+                  angleTask: true,
+                  angleCategory: angle.category,
+                  angleEmoji: angle.emoji,
+                },
+                correctAnswer: null,
+                difficulty: angle.difficulty,
+                pointsReward: angle.difficulty === "hard" ? 15 : angle.difficulty === "medium" ? 12 : 10,
+                requiredVotes: dataset.votesRequired,
+                consensusThreshold: dataset.consensusThreshold,
+                supervisorId: dataset.supervisorId ?? null,
+                taskValuePoints: 10,
+                operatorRewardTon: 0.00004,
+                supervisorRewardTon: 0.0001,
+                rawSource: content.sourceUrl,
+              });
+              created++;
+            }
+          }
+
+          // ── VIDEO: multi-angle system ────────────────────────────────────
+          else if (content.type === "video" && config.useAngles) {
+            const angles = getVideoAngles(wantCount);
+            for (const angle of angles) {
+              if (created >= tasksPerDataset) break;
+              taskRows.push({
+                datasetId: dataset.id,
+                type: "video",
+                dataPayload: {
+                  question: angle.question,
+                  options: angle.options,
+                  videoUrl: content.videoUrl,
+                  thumbnail: content.thumbnail,
+                  source: content.sourceUrl,
+                  sourceName: content.sourceName,
+                  agentGenerated: true,
+                  angleTask: true,
+                  angleCategory: angle.category,
+                  angleEmoji: angle.emoji,
+                },
+                correctAnswer: null,
+                difficulty: angle.difficulty,
+                pointsReward: angle.difficulty === "hard" ? 15 : angle.difficulty === "medium" ? 12 : 10,
+                requiredVotes: dataset.votesRequired,
+                consensusThreshold: dataset.consensusThreshold,
+                supervisorId: dataset.supervisorId ?? null,
+                taskValuePoints: 10,
+                operatorRewardTon: 0.00004,
+                supervisorRewardTon: 0.0001,
+                rawSource: content.sourceUrl,
+              });
+              created++;
+            }
+          }
+
+          // ── SOCIAL: multi-angle system ───────────────────────────────────
+          else if (content.type === "social" && config.useAngles) {
+            const angles = getSocialAngles(wantCount);
+            for (const angle of angles) {
+              if (created >= tasksPerDataset) break;
+              taskRows.push({
+                datasetId: dataset.id,
+                type: "text",
+                dataPayload: {
+                  question: angle.question,
+                  options: angle.options,
+                  text: content.postText ?? content.text,
+                  source: content.sourceUrl,
+                  sourceName: content.sourceName,
+                  agentGenerated: true,
+                  angleTask: true,
+                  angleCategory: angle.category,
+                  angleEmoji: angle.emoji,
+                  postType: "social",
+                  postAuthor: content.postAuthor,
+                  postPlatform: content.postPlatform,
+                  postLikes: content.postLikes,
+                  postComments: content.postComments,
+                },
+                correctAnswer: null,
+                difficulty: angle.difficulty,
+                pointsReward: angle.difficulty === "hard" ? 15 : angle.difficulty === "medium" ? 12 : 10,
+                requiredVotes: dataset.votesRequired,
+                consensusThreshold: dataset.consensusThreshold,
+                supervisorId: dataset.supervisorId ?? null,
+                taskValuePoints: 10,
+                operatorRewardTon: 0.00004,
+                supervisorRewardTon: 0.0001,
+                rawSource: content.sourceUrl,
+              });
+              created++;
+            }
+          }
+
+          // ── TEXT: multi-angle system ─────────────────────────────────────
+          else if (content.type === "text" && config.useAngles) {
+            const angles = getTextAngles(wantCount);
+            for (const angle of angles) {
+              if (created >= tasksPerDataset) break;
+              taskRows.push({
+                datasetId: dataset.id,
+                type: "text",
+                dataPayload: {
+                  question: angle.question,
+                  options: angle.options,
+                  text: content.text,
+                  source: content.sourceUrl,
+                  sourceName: content.sourceName,
+                  agentGenerated: true,
+                  angleTask: true,
+                  angleCategory: angle.category,
+                  angleEmoji: angle.emoji,
+                },
+                correctAnswer: null,
+                difficulty: angle.difficulty,
+                pointsReward: angle.difficulty === "hard" ? 15 : angle.difficulty === "medium" ? 12 : 10,
+                requiredVotes: dataset.votesRequired,
+                consensusThreshold: dataset.consensusThreshold,
+                supervisorId: dataset.supervisorId ?? null,
+                taskValuePoints: 10,
+                operatorRewardTon: 0.00004,
+                supervisorRewardTon: 0.0001,
+                rawSource: content.sourceUrl,
+              });
+              created++;
+            }
+          }
+
+          // ── AUDIO / VIDEO / TEXT: Groq fallback (when useAngles is false) ─
           else if (content.type === "audio" || content.type === "video" || content.type === "text") {
             const generated = await generateTasksWithGroq(
               content, dataset.category, config.labels, wantCount,

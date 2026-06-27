@@ -373,18 +373,48 @@ export default function Tasks() {
                   {!!payload?.angleCategory && (
                     <Badge variant="outline" className={cn(
                       "text-[9px] uppercase font-black border",
-                      payload.angleCategory === "COLOR"    ? "text-pink-400 border-pink-400/40 bg-pink-400/10" :
-                      payload.angleCategory === "EMOTION"  ? "text-purple-400 border-purple-400/40 bg-purple-400/10" :
-                      payload.angleCategory === "SCALE"    ? "text-blue-400 border-blue-400/40 bg-blue-400/10" :
-                      payload.angleCategory === "SCENE"    ? "text-green-400 border-green-400/40 bg-green-400/10" :
-                      payload.angleCategory === "TIME"     ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10" :
-                      payload.angleCategory === "LIGHT"    ? "text-orange-400 border-orange-400/40 bg-orange-400/10" :
-                      payload.angleCategory === "SUBJECT"  ? "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" :
-                      payload.angleCategory === "ENERGY"   ? "text-red-400 border-red-400/40 bg-red-400/10" :
-                      payload.angleCategory === "TEXTURE"  ? "text-amber-400 border-amber-400/40 bg-amber-400/10" :
-                      payload.angleCategory === "STYLE"    ? "text-violet-400 border-violet-400/40 bg-violet-400/10" :
-                      payload.angleCategory === "NATURE"   ? "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" :
-                      payload.angleCategory === "GEOGRAPHY"? "text-teal-400 border-teal-400/40 bg-teal-400/10" :
+                      payload.angleCategory === "COLOR"      ? "text-pink-400 border-pink-400/40 bg-pink-400/10" :
+                      payload.angleCategory === "EMOTION"    ? "text-purple-400 border-purple-400/40 bg-purple-400/10" :
+                      payload.angleCategory === "SCALE"      ? "text-blue-400 border-blue-400/40 bg-blue-400/10" :
+                      payload.angleCategory === "SCENE"      ? "text-green-400 border-green-400/40 bg-green-400/10" :
+                      payload.angleCategory === "TIME"       ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10" :
+                      payload.angleCategory === "LIGHT"      ? "text-orange-400 border-orange-400/40 bg-orange-400/10" :
+                      payload.angleCategory === "SUBJECT"    ? "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" :
+                      payload.angleCategory === "ENERGY"     ? "text-red-400 border-red-400/40 bg-red-400/10" :
+                      payload.angleCategory === "TEXTURE"    ? "text-amber-400 border-amber-400/40 bg-amber-400/10" :
+                      payload.angleCategory === "STYLE"      ? "text-violet-400 border-violet-400/40 bg-violet-400/10" :
+                      payload.angleCategory === "NATURE"     ? "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" :
+                      payload.angleCategory === "GEOGRAPHY"  ? "text-teal-400 border-teal-400/40 bg-teal-400/10" :
+                      payload.angleCategory === "ACTION"     ? "text-rose-400 border-rose-400/40 bg-rose-400/10" :
+                      payload.angleCategory === "MOTION"     ? "text-orange-300 border-orange-300/40 bg-orange-300/10" :
+                      payload.angleCategory === "CAMERA"     ? "text-sky-400 border-sky-400/40 bg-sky-400/10" :
+                      payload.angleCategory === "COUNT"      ? "text-lime-400 border-lime-400/40 bg-lime-400/10" :
+                      payload.angleCategory === "QUALITY"    ? "text-yellow-300 border-yellow-300/40 bg-yellow-300/10" :
+                      payload.angleCategory === "SOUND"      ? "text-fuchsia-400 border-fuchsia-400/40 bg-fuchsia-400/10" :
+                      payload.angleCategory === "LANGUAGE"   ? "text-indigo-400 border-indigo-400/40 bg-indigo-400/10" :
+                      payload.angleCategory === "SPEAKER"    ? "text-cyan-300 border-cyan-300/40 bg-cyan-300/10" :
+                      payload.angleCategory === "GENDER"     ? "text-pink-300 border-pink-300/40 bg-pink-300/10" :
+                      payload.angleCategory === "SPEED"      ? "text-red-300 border-red-300/40 bg-red-300/10" :
+                      payload.angleCategory === "NOISE"      ? "text-slate-400 border-slate-400/40 bg-slate-400/10" :
+                      payload.angleCategory === "ACCENT"     ? "text-violet-300 border-violet-300/40 bg-violet-300/10" :
+                      payload.angleCategory === "CONTENT"    ? "text-green-300 border-green-300/40 bg-green-300/10" :
+                      payload.angleCategory === "TONE"       ? "text-amber-300 border-amber-300/40 bg-amber-300/10" :
+                      payload.angleCategory === "AGE"        ? "text-orange-400 border-orange-400/40 bg-orange-400/10" :
+                      payload.angleCategory === "SENTIMENT"  ? "text-purple-300 border-purple-300/40 bg-purple-300/10" :
+                      payload.angleCategory === "TOPIC"      ? "text-blue-300 border-blue-300/40 bg-blue-300/10" :
+                      payload.angleCategory === "FORMALITY"  ? "text-slate-300 border-slate-300/40 bg-slate-300/10" :
+                      payload.angleCategory === "INTENT"     ? "text-cyan-400 border-cyan-400/40 bg-cyan-400/10" :
+                      payload.angleCategory === "CLARITY"    ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10" :
+                      payload.angleCategory === "BIAS"       ? "text-red-400 border-red-400/40 bg-red-400/10" :
+                      payload.angleCategory === "AUDIENCE"   ? "text-teal-300 border-teal-300/40 bg-teal-300/10" :
+                      payload.angleCategory === "MEDIUM"     ? "text-blue-400 border-blue-400/40 bg-blue-400/10" :
+                      payload.angleCategory === "URGENCY"    ? "text-orange-500 border-orange-500/40 bg-orange-500/10" :
+                      payload.angleCategory === "LENGTH"     ? "text-green-400 border-green-400/40 bg-green-400/10" :
+                      payload.angleCategory === "SPAM"       ? "text-red-500 border-red-500/40 bg-red-500/10" :
+                      payload.angleCategory === "SAFETY"     ? "text-green-500 border-green-500/40 bg-green-500/10" :
+                      payload.angleCategory === "FAKE"       ? "text-amber-500 border-amber-500/40 bg-amber-500/10" :
+                      payload.angleCategory === "ENGAGEMENT" ? "text-pink-500 border-pink-500/40 bg-pink-500/10" :
+                      payload.angleCategory === "PLATFORM"   ? "text-blue-500 border-blue-500/40 bg-blue-500/10" :
                       "text-muted-foreground border-border/40"
                     )}>
                       {String(payload.angleEmoji ?? "")} {String(payload.angleCategory)}
@@ -469,6 +499,37 @@ export default function Tasks() {
                     Your browser does not support audio.
                   </audio>
                   <p className="text-[9px] text-muted-foreground text-center">Listen carefully, then select your answer</p>
+                </div>
+              )}
+
+              {/* Social post card — rendered when postType === "social" */}
+              {task.type === "text" && payload?.postType === "social" && !!payload?.text && (
+                <div className="rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-950/40 to-slate-900/60 overflow-hidden">
+                  {/* Platform header */}
+                  <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border-b border-blue-500/20">
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-[8px] font-black text-white">
+                      {String(payload.postAuthor ?? "U").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-blue-300 truncate">{String(payload.postAuthor ?? "Anonymous")}</p>
+                    </div>
+                    <span className="text-[8px] font-mono uppercase bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30">
+                      {payload.postPlatform === "mastodon" ? "🐘 Social" :
+                       payload.postPlatform === "facebook" ? "📘 Facebook" :
+                       payload.postPlatform === "instagram" ? "📸 Instagram" :
+                       payload.postPlatform === "wechat" ? "💬 WeChat" : "📱 Social"}
+                    </span>
+                  </div>
+                  {/* Post content */}
+                  <div className="px-3 py-2.5">
+                    <p className="text-[11px] leading-relaxed text-slate-200 line-clamp-4">{String(payload.text)}</p>
+                  </div>
+                  {/* Fake engagement */}
+                  <div className="flex items-center gap-3 px-3 py-2 border-t border-blue-500/20 text-[9px] text-muted-foreground">
+                    <span>❤️ {Number(payload.postLikes ?? Math.floor(Math.random() * 800)).toLocaleString()}</span>
+                    <span>💬 {Number(payload.postComments ?? Math.floor(Math.random() * 60)).toLocaleString()}</span>
+                    <span className="ml-auto">🔁 Label this post</span>
+                  </div>
                 </div>
               )}
 
