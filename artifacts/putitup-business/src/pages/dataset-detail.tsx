@@ -1,5 +1,6 @@
 import { useParams, Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
+import { useAdsgram } from "@/hooks/use-adsgram";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -124,6 +125,7 @@ export default function DatasetDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useBusinessAuth();
   const [, navigate] = useLocation();
+  const { showAd } = useAdsgram();
 
   const staticDataset = datasets[id ?? ""];
 
@@ -191,7 +193,9 @@ export default function DatasetDetail() {
         return;
       }
       const { challengeToken } = await challengeRes.json();
-      await new Promise((r) => setTimeout(r, 20_000));
+      // Show real Adsgram ad; falls back to 20s wait if not configured
+      const adWatched = await showAd();
+      if (!adWatched) await new Promise((r) => setTimeout(r, 20_000));
       const res = await fetch(`${API_BASE}/api/clients/${client.id}/ads/watch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
