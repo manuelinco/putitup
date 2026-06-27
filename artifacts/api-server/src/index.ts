@@ -15,6 +15,19 @@ if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${raw
 async function runAppMigrations() {
   const client = await pool.connect();
   try {
+    // Add new enum values for audio/video task types (IF NOT EXISTS via DO block)
+    await client.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'audio' AND enumtypid = 'task_type'::regtype) THEN
+          ALTER TYPE task_type ADD VALUE 'audio';
+        END IF;
+      END $$;
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumlabel = 'video' AND enumtypid = 'task_type'::regtype) THEN
+          ALTER TYPE task_type ADD VALUE 'video';
+        END IF;
+      END $$;
+    `);
     await client.query(`
       ALTER TABLE tasks
         ADD COLUMN IF NOT EXISTS needs_relabeling boolean NOT NULL DEFAULT false,
