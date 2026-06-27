@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, count, and } from "drizzle-orm";
 import { db, usersTable, taskResponsesTable } from "@workspace/db";
+import { requireUser, requireUserParam } from "../middleware/requireUser";
 
 const router: IRouter = Router();
 
@@ -10,9 +11,9 @@ function generateCode(username: string): string {
   return `${base}${suffix}`;
 }
 
-router.post("/referral/apply", async (req, res): Promise<void> => {
+router.post("/referral/apply", requireUser, async (req, res): Promise<void> => {
   const { userId, referralCode } = req.body ?? {};
-  const uid = Number(userId);
+  const uid = req.userId ?? Number(userId);
   if (!Number.isFinite(uid) || !referralCode) {
     res.status(400).json({ error: "userId and referralCode are required" });
     return;
@@ -87,8 +88,8 @@ router.get("/referral/stats/:userId", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/referral/check-bonus/:userId", async (req, res): Promise<void> => {
-  const uid = Number(req.params.userId);
+router.post("/referral/check-bonus/:userId", requireUserParam("userId"), async (req, res): Promise<void> => {
+  const uid = req.userId ?? Number(req.params.userId);
   if (!Number.isFinite(uid)) {
     res.status(400).json({ error: "Invalid user ID" });
     return;

@@ -5,6 +5,7 @@ import {
   WatchAdBody,
   GetAdTrackingParams,
 } from "@workspace/api-zod";
+import { requireUser } from "../middleware/requireUser";
 
 const DAILY_AD_CAP = 20;
 const ENERGY_PER_AD = 20;
@@ -12,14 +13,15 @@ const POINTS_PER_AD = 5;
 
 const router: IRouter = Router();
 
-router.post("/ads/watch", async (req, res): Promise<void> => {
+router.post("/ads/watch", requireUser, async (req, res): Promise<void> => {
   const parsed = WatchAdBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { userId, adType } = parsed.data;
+  const { adType } = parsed.data;
+  const userId = req.userId ?? parsed.data.userId;
 
   const [user] = await db
     .select()

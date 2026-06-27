@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useTonConnectUI, useTonWallet } from "@tonconnect/ui-react";
 import { API_BASE } from "@/lib/api";
+import { saveSessionToken, getSessionToken, clearSessionToken } from "@/lib/session";
 
 export interface AuthUser {
   id: number;
@@ -59,6 +60,7 @@ function clearSession() {
   localStorage.removeItem("ia_games_user_id");
   localStorage.removeItem("ia_games_auth_source");
   localStorage.removeItem(CACHE_KEY);
+  clearSessionToken();
 }
 
 /** Salva dati utente in cache per accesso istantaneo al prossimo avvio */
@@ -79,10 +81,16 @@ async function apiFetch(path: string, options?: RequestInit) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000); // 8s max (era 20s)
   try {
+    const token = getSessionToken();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...((options?.headers as Record<string, string>) ?? {}),
+    };
+    if (token && !headers["Authorization"]) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch(`${API_BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
       signal: controller.signal,
       ...options,
+      headers,
     });
     if (!res.ok && res.status !== 404) throw new Error(`API error ${res.status}`);
     if (res.status === 404) return null;
@@ -98,6 +106,16 @@ function getTelegramUser(): { id: string; username?: string } | null {
     if (tg?.initDataUnsafe?.user?.id) {
       return { id: String(tg.initDataUnsafe.user.id), username: tg.initDataUnsafe.user.username };
     }
+  } catch {}
+  return null;
+}
+
+/** Raw signed initData string used for server-side HMAC validation. */
+function getTelegramInitData(): string | null {
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    const data = tg?.initData;
+    return typeof data === "string" && data.length > 0 ? data : null;
   } catch {}
   return null;
 }
@@ -148,6 +166,44 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     if (user?.id) await loadUserById(user.id);
   }, [user?.id, loadUserById]);
 
+  /**
+   * Securely log in (or refresh the session token for) a Telegram user using
+   * the signed initData string. Returns the DB user when the account already
+   * exists, `"needs-registration"` when initData is valid but no account exists,
+   * or null when validation is unavailable/failed.
+   */
+  const validateTelegram = useCallback(
+    async (
+      initData: string,
+    ): Promise<AuthUser | "needs-registration" | null> => {
+      try {
+        const r = await apiFetch("/api/auth/telegram/validate", {
+          method: "POST",
+          body: JSON.stringify({ initData }),
+        });
+        if (!r?.valid) return null;
+        if (r.token) saveSessionToken(r.token as string);
+        if (r.user) {
+          setAndCacheUser(r.user as AuthUser);
+          return r.user as AuthUser;
+        }
+        return "needs-registration";
+      } catch {
+        return null;
+      }
+    },
+    [setAndCacheUser],
+  );
+
+  /** Background top-up: ensure a returning session has a fresh token. */
+  const ensureSessionToken = useCallback(async () => {
+    if (getSessionToken()) return;
+    const initData = getTelegramInitData();
+    if (initData) {
+      await validateTelegram(initData);
+    }
+  }, [validateTelegram]);
+
   // ─── Inizializzazione ──────────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
@@ -161,6 +217,8 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         if (cached) {
           // Utente visibile subito — revalidate silenzioso in background
           setInitialized(true);
+          // Top-up del token di sessione (per utenti Telegram di ritorno) senza bloccare la UI
+          void ensureSessionToken();
           loadUserById(session.userId).then((fresh) => {
             if (!fresh) {
               // Sessione non più valida
@@ -173,6 +231,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Nessuna cache: chiamata bloccante (prima visita dopo login)
+        void ensureSessionToken();
         const u = await loadUserById(session.userId);
         if (u) {
           setSource(session.source);
@@ -184,24 +243,47 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       }
 
       // ── Nessuna sessione: Telegram login ──
+      const tgInitData = getTelegramInitData();
       const tgUser = getTelegramUser();
-      if (tgUser) {
-        try {
-          const u = await apiFetch(`/api/users/by-telegram/${tgUser.id}`);
-          if (u) {
-            setAndCacheUser(u as AuthUser);
+      if (tgInitData || tgUser) {
+        // Percorso sicuro: validazione HMAC dell'initData firmato
+        if (tgInitData) {
+          const result = await validateTelegram(tgInitData);
+          if (result && result !== "needs-registration") {
             setSource("telegram");
-            saveSession((u as AuthUser).id, "telegram");
+            saveSession(result.id, "telegram");
             setInitialized(true);
             setIsLoading(false);
             return;
           }
-        } catch {}
-        setPendingTelegramId(tgUser.id);
-        setNeedsWalletConnect(true);
-        setInitialized(true);
-        setIsLoading(false);
-        return;
+          if (result === "needs-registration") {
+            if (tgUser) setPendingTelegramId(tgUser.id);
+            setNeedsWalletConnect(true);
+            setInitialized(true);
+            setIsLoading(false);
+            return;
+          }
+          // result === null → validazione non disponibile, fallback legacy sotto
+        }
+        // Fallback legacy (modalità soft): lookup per telegramId senza token
+        if (tgUser) {
+          try {
+            const u = await apiFetch(`/api/users/by-telegram/${tgUser.id}`);
+            if (u) {
+              setAndCacheUser(u as AuthUser);
+              setSource("telegram");
+              saveSession((u as AuthUser).id, "telegram");
+              setInitialized(true);
+              setIsLoading(false);
+              return;
+            }
+          } catch {}
+          setPendingTelegramId(tgUser.id);
+          setNeedsWalletConnect(true);
+          setInitialized(true);
+          setIsLoading(false);
+          return;
+        }
       }
 
       setInitialized(true);
@@ -216,7 +298,15 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     if (!initialized) return;
     if (wallet) {
       const addr = wallet.account.address;
-      if (user?.walletAddress === addr) return;
+      if (user?.walletAddress === addr) {
+        // Utente wallet di ritorno: assicura un token di sessione se mancante
+        if (!getSessionToken()) {
+          apiFetch(`/api/users/by-wallet/${addr}`).then((u) => {
+            if (u && (u as any).token) saveSessionToken((u as any).token as string);
+          }).catch(() => {});
+        }
+        return;
+      }
       if (user) {
         apiFetch(`/api/users/${user.id}`, {
           method: "PATCH",
@@ -229,6 +319,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       }
       apiFetch(`/api/users/by-wallet/${addr}`).then((u) => {
         if (u) {
+          if ((u as any).token) saveSessionToken((u as any).token as string);
           setAndCacheUser(u as AuthUser);
           setSource("wallet");
           saveSession((u as AuthUser).id, "wallet");
@@ -274,9 +365,16 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     if (!pendingWallet && !pendingTelegramId) throw new Error("Identity not available");
     const body: Record<string, unknown> = { username };
     if (pendingWallet) body.walletAddress = pendingWallet;
-    if (pendingTelegramId) body.telegramId = pendingTelegramId;
+    if (pendingTelegramId) {
+      body.telegramId = pendingTelegramId;
+      // Include signed initData so the server can verify Telegram ownership and
+      // mint a session token (a bare telegramId is never trusted for issuance).
+      const initData = getTelegramInitData();
+      if (initData) body.initData = initData;
+    }
     const u = await apiFetch("/api/users", { method: "POST", body: JSON.stringify(body) });
     if (!u) throw new Error("Registrazione fallita");
+    if ((u as any).token) saveSessionToken((u as any).token as string);
     setAndCacheUser(u as AuthUser);
     const src = pendingTelegramId ? "telegram" : "wallet";
     setSource(src);

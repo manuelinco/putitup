@@ -6,6 +6,7 @@ import {
   GetDailyMissionsParams,
   RechargeEnergyBody,
 } from "@workspace/api-zod";
+import { requireUser } from "../middleware/requireUser";
 
 const TON_PER_POINT = 0.001;
 const MIN_PAYOUT = 1000;
@@ -13,14 +14,15 @@ const ENERGY_PER_RECHARGE = 50;
 
 const router: IRouter = Router();
 
-router.post("/rewards/convert", async (req, res): Promise<void> => {
+router.post("/rewards/convert", requireUser, async (req, res): Promise<void> => {
   const parsed = ConvertPointsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { userId, points } = parsed.data;
+  const { points } = parsed.data;
+  const userId = req.userId ?? parsed.data.userId;
 
   const [user] = await db
     .select()
@@ -159,14 +161,15 @@ router.get("/rewards/missions/:userId", async (req, res): Promise<void> => {
   res.json(missions);
 });
 
-router.post("/rewards/energy/recharge", async (req, res): Promise<void> => {
+router.post("/rewards/energy/recharge", requireUser, async (req, res): Promise<void> => {
   const parsed = RechargeEnergyBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { userId, method } = parsed.data;
+  const { method } = parsed.data;
+  const userId = req.userId ?? parsed.data.userId;
 
   const [user] = await db
     .select()

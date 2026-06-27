@@ -10,6 +10,9 @@ import {
   GetUserStatsParams,
   GetUserByTelegramParams,
 } from "@workspace/api-zod";
+import { signSessionToken } from "../lib/sessionToken";
+import { verifyTelegramInitData } from "../lib/telegramAuth";
+import { requireSelf } from "../middleware/requireUser";
 
 const ENERGY_REGEN_PER_30MIN = 1;
 const REGEN_INTERVAL_MS = 30 * 60 * 1000;
@@ -51,7 +54,7 @@ router.get("/users", async (req, res): Promise<void> => {
 });
 
 router.post("/users", async (req, res): Promise<void> => {
-  const { username, telegramId, walletAddress, avatarUrl } = req.body ?? {};
+  const { username, telegramId, walletAddress, avatarUrl, initData } = req.body ?? {};
 
   if (!username || typeof username !== "string" || username.length < 3 || username.length > 20) {
     res.status(400).json({ error: "Username must be 3-20 characters" });
@@ -61,6 +64,37 @@ router.post("/users", async (req, res): Promise<void> => {
     res.status(400).json({ error: "telegramId or walletAddress is required" });
     return;
   }
+
+  // ── Identity proof for token issuance ─────────────────────────────────────
+  // A session token must only be minted for an identity the caller can prove
+  // they own. Telegram ownership is proven by a valid HMAC-signed initData; a
+  // caller-supplied telegramId on its own is NEVER enough (it is public/guessable
+  // and would otherwise allow minting a token for any Telegram account). The
+  // verified telegramId from initData is the source of truth and overrides any
+  // telegramId in the body. Wallet ownership has no on-chain proof yet, so a
+  // wallet token remains a documented residual risk (see by-wallet route).
+  let verifiedTelegramId: string | null = null;
+  if (typeof initData === "string" && initData.length > 0) {
+    const v = verifyTelegramInitData(initData);
+    if (v.ok && v.telegramId) verifiedTelegramId = v.telegramId;
+  }
+
+  /**
+   * Decide which (if any) session token to return for a resolved user.
+   * - telegram token: only when initData proved ownership of this user's telegramId
+   * - wallet token  : only when the request carried the matching walletAddress
+   *                   (residual risk — no signature proof)
+   * Otherwise the response is tokenless and legacy soft-mode behaviour applies.
+   */
+  const tokenFor = (u: typeof usersTable.$inferSelect): string | undefined => {
+    if (u.telegramId && verifiedTelegramId && u.telegramId === verifiedTelegramId) {
+      return signSessionToken(u.id, "telegram");
+    }
+    if (u.walletAddress && walletAddress && u.walletAddress === String(walletAddress)) {
+      return signSessionToken(u.id, "wallet");
+    }
+    return undefined;
+  };
 
   // Check for existing user by telegramId or walletAddress
   const conditions = [];
@@ -75,10 +109,15 @@ router.post("/users", async (req, res): Promise<void> => {
       .limit(1);
 
     if (existing.length > 0) {
-      res.status(201).json(existing[0]);
+      const u = existing[0];
+      res.status(201).json({ ...u, token: tokenFor(u) });
       return;
     }
   }
+
+  // Persist the verified telegramId when present; fall back to the body value
+  // for legacy/soft-mode creation (such accounts are created tokenless above).
+  const finalTelegramId = verifiedTelegramId ?? (telegramId ? String(telegramId) : null);
 
   const base = String(username).replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 4).padEnd(4, "X");
   const referralCode = `${base}${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -86,12 +125,12 @@ router.post("/users", async (req, res): Promise<void> => {
   try {
     const [user] = await db.insert(usersTable).values({
       username: String(username),
-      telegramId: telegramId ? String(telegramId) : null,
+      telegramId: finalTelegramId,
       walletAddress: walletAddress ? String(walletAddress) : null,
       avatarUrl: avatarUrl ? String(avatarUrl) : null,
       referralCode,
     }).returning();
-    res.status(201).json(user);
+    res.status(201).json({ ...user, token: tokenFor(user) });
   } catch (err: any) {
     if (err?.code === "23505") {
       res.status(409).json({ error: "Username already taken" });
@@ -128,7 +167,7 @@ router.get("/users/by-wallet/:walletAddress", async (req, res): Promise<void> =>
     res.status(404).json({ error: "User not found" });
     return;
   }
-  res.json(user);
+  res.json({ ...user, token: signSessionToken(user.id, "wallet") });
 });
 
 router.get("/users/by-telegram/:telegramId", async (req, res): Promise<void> => {
@@ -243,7 +282,7 @@ router.get("/users/:id/rewards", async (req, res): Promise<void> => {
   res.json({ entries, totalTon: Math.round(totalTon * 1e7) / 1e7 });
 });
 
-router.patch("/users/:id", async (req, res): Promise<void> => {
+router.patch("/users/:id", requireSelf, async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

@@ -14,6 +14,7 @@ import {
   GetResponseParams,
 } from "@workspace/api-zod";
 import { generateVirtualTask } from "../lib/virtualTasks";
+import { requireUser } from "../middleware/requireUser";
 
 const VIRTUAL_TASK_BASE = 10_000_000_000;
 const VIRTUAL_DATASET_SLOTS = 10_000_000; // datasetId * 10M + slot
@@ -51,40 +52,15 @@ router.get("/responses", async (req, res): Promise<void> => {
   res.json(responses);
 });
 
-router.post("/responses", async (req, res): Promise<void> => {
+router.post("/responses", requireUser, async (req, res): Promise<void> => {
   const parsed = SubmitResponseBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const { userId, taskId, answer, responseTimeMs } = parsed.data;
-
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, userId));
-
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-
-  // Check duplicate BEFORE energy — avoids misleading "not enough energy" on re-submit
-  const [existingResponse] = await db
-    .select({ id: taskResponsesTable.id })
-    .from(taskResponsesTable)
-    .where(and(eq(taskResponsesTable.userId, userId), eq(taskResponsesTable.taskId, taskId)));
-
-  if (existingResponse) {
-    res.status(409).json({ error: "Task already submitted by this user" });
-    return;
-  }
-
-  if (user.energy < MIN_ENERGY_PER_TASK) {
-    res.status(400).json({ error: "Not enough energy" });
-    return;
-  }
+  const { taskId, answer, responseTimeMs } = parsed.data;
+  const userId = req.userId ?? parsed.data.userId;
 
   // ── Virtual task materialization ──────────────────────────────────────
   // If taskId is synthetic (> VIRTUAL_TASK_BASE), reconstruct the virtual
@@ -96,29 +72,22 @@ router.post("/responses", async (req, res): Promise<void> => {
     const slot      = offset % VIRTUAL_DATASET_SLOTS;
     const vtask     = generateVirtualTask(datasetId, slot);
 
-    // Upsert: check if already materialized
-    const [existing] = await db
-      .select({ id: tasksTable.id })
-      .from(tasksTable)
-      .where(eq(tasksTable.id, taskId));
-
-    if (!existing) {
-      await db.insert(tasksTable).values({
-        id:                 taskId,
-        type:               vtask.type,
-        dataPayload:        vtask.dataPayload as unknown as Record<string, unknown>,
-        correctAnswer:      vtask.correctAnswer,
-        difficulty:         vtask.difficulty,
-        pointsReward:       vtask.pointsReward,
-        isGolden:           vtask.isGolden,
-        datasetId:          vtask.datasetId,
-        requiredVotes:      vtask.requiredVotes,
-        consensusThreshold: vtask.consensusThreshold,
-        status:             "active",
-        reviewStage:        "labeling",
-        consensusCount:     0,
-      });
-    }
+    // Idempotent insert; concurrent submitters race-safely no-op on conflict.
+    await db.insert(tasksTable).values({
+      id:                 taskId,
+      type:               vtask.type,
+      dataPayload:        vtask.dataPayload as unknown as Record<string, unknown>,
+      correctAnswer:      vtask.correctAnswer,
+      difficulty:         vtask.difficulty,
+      pointsReward:       vtask.pointsReward,
+      isGolden:           vtask.isGolden,
+      datasetId:          vtask.datasetId,
+      requiredVotes:      vtask.requiredVotes,
+      consensusThreshold: vtask.consensusThreshold,
+      status:             "active",
+      reviewStage:        "labeling",
+      consensusCount:     0,
+    }).onConflictDoNothing();
     resolvedTaskId = taskId;
   }
 
@@ -147,159 +116,211 @@ router.post("/responses", async (req, res): Promise<void> => {
   const pointsEarned = basePts * difficultyMultiplier;
   const xpEarned = XP_PER_TASK * difficultyMultiplier;
 
-  const [response] = await db
-    .insert(taskResponsesTable)
-    .values({
-      userId,
-      taskId,
-      answer,
-      isCorrect,
-      responseTimeMs,
-      pointsEarned,
-    })
-    .returning();
+  // ── Atomic reward application (H-2) ───────────────────────────────────
+  // Lock the user row for the duration so concurrent submissions cannot
+  // double-spend energy or double-credit points/xp. The unique
+  // (userId, taskId) constraint is the hard guarantee against duplicates.
+  try {
+    const result = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .for("update");
 
-  const taskResponses = await db
-    .select()
-    .from(taskResponsesTable)
-    .where(eq(taskResponsesTable.taskId, taskId));
-
-  const answerCounts = new Map<string, number>();
-  for (const item of taskResponses) {
-    const normalized = item.answer.trim().toLowerCase();
-    answerCounts.set(normalized, (answerCounts.get(normalized) ?? 0) + 1);
-  }
-
-  const sortedAnswers = [...answerCounts.entries()].sort((a, b) => b[1] - a[1]);
-  const topAnswer = sortedAnswers[0];
-  const totalVotes = taskResponses.length;
-  const ratio = topAnswer && totalVotes > 0 ? topAnswer[1] / totalVotes : 0;
-  const consensusReached = totalVotes >= task.requiredVotes && ratio >= task.consensusThreshold;
-
-  let consensusUpdate: Partial<typeof tasksTable.$inferInsert> = {
-    consensusCount: totalVotes,
-  };
-
-  if (consensusReached && task.reviewStage === "labeling") {
-    const winningAnswer = topAnswer?.[0] ?? answer;
-
-    // If consensus landed on "Other" / vague answer → send to relabeling basket
-    // A supervisor will inject specific labels so the task can be re-labeled properly
-    const isOtherConsensus = winningAnswer.trim().toLowerCase().startsWith("other") ||
-      winningAnswer.trim().toLowerCase().includes("cannot assess");
-
-    if (isOtherConsensus) {
-      consensusUpdate = {
-        ...consensusUpdate,
-        finalLabel: winningAnswer,
-        needsRelabeling: true,
-        reviewStage: "relabel_queue",
-        status: "relabel_queue",
-      };
-    } else {
-      let nextStatus = "pending_admin";
-      let nextStage = "admin_review";
-      let approvedAt: Date | null = null;
-      let adminApprovedAt: Date | null = null;
-
-      if (task.datasetId) {
-        const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, task.datasetId));
-        if (dataset?.workflowMode === "consensus") {
-          nextStatus = "approved";
-          nextStage = "published";
-          approvedAt = new Date();
-          adminApprovedAt = approvedAt;
-        } else if (dataset?.workflowMode === "supervisor_admin" || task.supervisorId) {
-          nextStatus = "pending_supervisor";
-          nextStage = "supervisor_review";
-        }
-      } else if (!task.supervisorId) {
-        nextStatus = "approved";
-        nextStage = "published";
-        approvedAt = new Date();
-        adminApprovedAt = approvedAt;
+      if (!user) {
+        return { kind: "error" as const, status: 404, error: "User not found" };
       }
 
-      consensusUpdate = {
-        ...consensusUpdate,
-        finalLabel: winningAnswer,
-        status: nextStatus,
-        reviewStage: nextStage,
-        approvedAt,
-        adminApprovedAt,
+      const [existingResponse] = await tx
+        .select({ id: taskResponsesTable.id })
+        .from(taskResponsesTable)
+        .where(and(eq(taskResponsesTable.userId, userId), eq(taskResponsesTable.taskId, taskId)));
+      if (existingResponse) {
+        return { kind: "error" as const, status: 409, error: "Task already submitted by this user" };
+      }
+
+      if (user.energy < MIN_ENERGY_PER_TASK) {
+        return { kind: "error" as const, status: 400, error: "Not enough energy" };
+      }
+
+      const [response] = await tx
+        .insert(taskResponsesTable)
+        .values({
+          userId,
+          taskId,
+          answer,
+          isCorrect,
+          responseTimeMs,
+          pointsEarned,
+        })
+        .returning();
+
+      const taskResponses = await tx
+        .select()
+        .from(taskResponsesTable)
+        .where(eq(taskResponsesTable.taskId, taskId));
+
+      const answerCounts = new Map<string, number>();
+      for (const item of taskResponses) {
+        const normalized = item.answer.trim().toLowerCase();
+        answerCounts.set(normalized, (answerCounts.get(normalized) ?? 0) + 1);
+      }
+
+      const sortedAnswers = [...answerCounts.entries()].sort((a, b) => b[1] - a[1]);
+      const topAnswer = sortedAnswers[0];
+      const totalVotes = taskResponses.length;
+      const ratio = topAnswer && totalVotes > 0 ? topAnswer[1] / totalVotes : 0;
+      const consensusReached = totalVotes >= task.requiredVotes && ratio >= task.consensusThreshold;
+
+      let consensusUpdate: Partial<typeof tasksTable.$inferInsert> = {
+        consensusCount: totalVotes,
       };
-    }
-  }
 
-  const newStreak = user.streak + 1;
-  const newEnergy = Math.max(0, user.energy - MIN_ENERGY_PER_TASK);
+      if (consensusReached && task.reviewStage === "labeling") {
+        const winningAnswer = topAnswer?.[0] ?? answer;
 
-  const allResponses = await db
-    .select()
-    .from(taskResponsesTable)
-    .where(eq(taskResponsesTable.userId, userId));
+        // If consensus landed on "Other" / vague answer → send to relabeling basket
+        // A supervisor will inject specific labels so the task can be re-labeled properly
+        const isOtherConsensus = winningAnswer.trim().toLowerCase().startsWith("other") ||
+          winningAnswer.trim().toLowerCase().includes("cannot assess");
 
-  const totalResponses = allResponses.length;
-  const correctResponses = allResponses.filter(
-    (r) => r.isCorrect === true,
-  ).length;
-  const newScore =
-    totalResponses > 0
-      ? (correctResponses / totalResponses) * 100
-      : user.score;
+        if (isOtherConsensus) {
+          consensusUpdate = {
+            ...consensusUpdate,
+            finalLabel: winningAnswer,
+            needsRelabeling: true,
+            reviewStage: "relabel_queue",
+            status: "relabel_queue",
+          };
+        } else {
+          let nextStatus = "pending_admin";
+          let nextStage = "admin_review";
+          let approvedAt: Date | null = null;
+          let adminApprovedAt: Date | null = null;
 
-  const accuracyBonus = newScore >= ACCURACY_BONUS_THRESHOLD;
+          if (task.datasetId) {
+            const [dataset] = await tx.select().from(datasetsTable).where(eq(datasetsTable.id, task.datasetId));
+            if (dataset?.workflowMode === "consensus") {
+              nextStatus = "approved";
+              nextStage = "published";
+              approvedAt = new Date();
+              adminApprovedAt = approvedAt;
+            } else if (dataset?.workflowMode === "supervisor_admin" || task.supervisorId) {
+              nextStatus = "pending_supervisor";
+              nextStage = "supervisor_review";
+            }
+          } else if (!task.supervisorId) {
+            nextStatus = "approved";
+            nextStage = "published";
+            approvedAt = new Date();
+            adminApprovedAt = approvedAt;
+          }
 
-  const earnedPts = isCorrect ? pointsEarned + (accuracyBonus ? 5 : 0) : 0;
-  const earnedXp = isCorrect ? xpEarned : 0;
-  const finalXp = user.xp + earnedXp;
-  const finalLevel = computeLevel(finalXp);
-  const didLevelUp = finalLevel !== user.level;
+          consensusUpdate = {
+            ...consensusUpdate,
+            finalLabel: winningAnswer,
+            status: nextStatus,
+            reviewStage: nextStage,
+            approvedAt,
+            adminApprovedAt,
+          };
+        }
+      }
 
-  await db
-    .update(usersTable)
-    .set({
-      points: user.points + earnedPts,
-      xp: finalXp,
-      level: finalLevel,
-      streak: newStreak,
-      score: Math.round(newScore * 10) / 10,
-      energy: newEnergy,
-      lastTaskAt: new Date(),
-    })
-    .where(eq(usersTable.id, userId));
+      const newStreak = user.streak + 1;
+      const newEnergy = Math.max(0, user.energy - MIN_ENERGY_PER_TASK);
 
-  await db
-    .update(tasksTable)
-    .set(consensusUpdate)
-    .where(eq(tasksTable.id, taskId));
+      const allResponses = await tx
+        .select()
+        .from(taskResponsesTable)
+        .where(eq(taskResponsesTable.userId, userId));
 
-  await db.insert(activityEventsTable).values({
-    type: "task_completed",
-    userId: user.id,
-    username: user.username,
-    description: `${user.username} completed a ${task.difficulty} ${task.type} task and earned ${earnedPts} pts`,
-    metadata: { taskId, pointsEarned: earnedPts, xpEarned: earnedXp },
-  });
+      const totalResponses = allResponses.length;
+      const correctResponses = allResponses.filter(
+        (r) => r.isCorrect === true,
+      ).length;
+      const newScore =
+        totalResponses > 0
+          ? (correctResponses / totalResponses) * 100
+          : user.score;
 
-  if (didLevelUp) {
-    await db.insert(activityEventsTable).values({
-      type: "level_up",
-      userId: user.id,
-      username: user.username,
-      description: `${user.username} leveled up to ${finalLevel}!`,
-      metadata: { newLevel: finalLevel },
+      const accuracyBonus = newScore >= ACCURACY_BONUS_THRESHOLD;
+
+      const earnedPts = isCorrect ? pointsEarned + (accuracyBonus ? 5 : 0) : 0;
+      const earnedXp = isCorrect ? xpEarned : 0;
+      const finalXp = user.xp + earnedXp;
+      const finalLevel = computeLevel(finalXp);
+      const didLevelUp = finalLevel !== user.level;
+
+      await tx
+        .update(usersTable)
+        .set({
+          points: user.points + earnedPts,
+          xp: finalXp,
+          level: finalLevel,
+          streak: newStreak,
+          score: Math.round(newScore * 10) / 10,
+          energy: newEnergy,
+          lastTaskAt: new Date(),
+        })
+        .where(eq(usersTable.id, userId));
+
+      await tx
+        .update(tasksTable)
+        .set(consensusUpdate)
+        .where(eq(tasksTable.id, taskId));
+
+      await tx.insert(activityEventsTable).values({
+        type: "task_completed",
+        userId: user.id,
+        username: user.username,
+        description: `${user.username} completed a ${task.difficulty} ${task.type} task and earned ${earnedPts} pts`,
+        metadata: { taskId, pointsEarned: earnedPts, xpEarned: earnedXp },
+      });
+
+      if (didLevelUp) {
+        await tx.insert(activityEventsTable).values({
+          type: "level_up",
+          userId: user.id,
+          username: user.username,
+          description: `${user.username} leveled up to ${finalLevel}!`,
+          metadata: { newLevel: finalLevel },
+        });
+      }
+
+      return {
+        kind: "ok" as const,
+        response,
+        earnedPts,
+        earnedXp,
+        accuracyBonus,
+        didLevelUp,
+        finalLevel,
+        newStreak,
+      };
     });
-  }
 
-  res.status(201).json({
-    response,
-    pointsEarned: earnedPts,
-    xpEarned: earnedXp,
-    accuracyBonus: isCorrect && accuracyBonus,
-    newLevel: didLevelUp ? finalLevel : null,
-    streakBonus: newStreak > 0 && newStreak % 7 === 0,
-  });
+    if (result.kind === "error") {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+
+    res.status(201).json({
+      response: result.response,
+      pointsEarned: result.earnedPts,
+      xpEarned: result.earnedXp,
+      accuracyBonus: isCorrect && result.accuracyBonus,
+      newLevel: result.didLevelUp ? result.finalLevel : null,
+      streakBonus: result.newStreak > 0 && result.newStreak % 7 === 0,
+    });
+  } catch (err: unknown) {
+    if ((err as { code?: string })?.code === "23505") {
+      res.status(409).json({ error: "Task already submitted by this user" });
+      return;
+    }
+    throw err;
+  }
 });
 
 router.get("/responses/:id", async (req, res): Promise<void> => {

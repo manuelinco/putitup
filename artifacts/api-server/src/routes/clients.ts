@@ -4,7 +4,11 @@ import { db, clientsTable, datasetsTable, datasetAccessTable, clientSessionsTabl
 import { pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from "crypto";
 import { verifyAdChallengeToken } from "./auth";
 
-const SESSION_SECRET = process.env["SESSION_SECRET"] ?? "fallback-secret-change-me";
+const SESSION_SECRET = (() => {
+  const s = process.env["SESSION_SECRET"];
+  if (!s) throw new Error("SESSION_SECRET env var is required");
+  return s;
+})();
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 
 function generateSessionToken(clientId: number): string {

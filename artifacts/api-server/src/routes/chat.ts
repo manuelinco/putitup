@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db, chatMessagesTable, usersTable } from "@workspace/db";
+import { requireUser } from "../middleware/requireUser";
 
 const router: IRouter = Router();
 const MAX_MSG_LEN = 500;
@@ -21,14 +22,14 @@ router.get("/chat/messages", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/chat/messages", async (req, res): Promise<void> => {
+router.post("/chat/messages", requireUser, async (req, res): Promise<void> => {
   try {
     const { userId, content } = req.body ?? {};
-    if (!userId || !content) {
+    if ((!userId && !req.userId) || !content) {
       res.status(400).json({ error: "userId and content are required" });
       return;
     }
-    const uid = Number(userId);
+    const uid = req.userId ?? Number(userId);
     if (!Number.isFinite(uid) || uid <= 0) {
       res.status(400).json({ error: "Invalid userId" });
       return;

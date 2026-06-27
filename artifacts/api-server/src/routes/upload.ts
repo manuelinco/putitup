@@ -8,12 +8,13 @@ import {
   datasetsTable,
   rewardLedgerTable,
 } from "@workspace/db";
+import { requireUser } from "../middleware/requireUser";
 
 const router: IRouter = Router();
 
-router.post("/upload/datasets", async (req, res): Promise<void> => {
+router.post("/upload/datasets", requireUser, async (req, res): Promise<void> => {
   const { userId, title, description, taskType, labelingInstructions, labelOptions } = req.body ?? {};
-  if (!userId || !title || !taskType) {
+  if ((!userId && !req.userId) || !title || !taskType) {
     res.status(400).json({ error: "userId, title, and taskType are required" });
     return;
   }
@@ -23,7 +24,7 @@ router.post("/upload/datasets", async (req, res): Promise<void> => {
     return;
   }
   const [row] = await db.insert(contributorDatasetsTable).values({
-    userId: Number(userId),
+    userId: req.userId ?? Number(userId),
     title: String(title),
     description: description ? String(description) : null,
     taskType: String(taskType),
@@ -34,7 +35,7 @@ router.post("/upload/datasets", async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
-router.post("/upload/datasets/:id/items", async (req, res): Promise<void> => {
+router.post("/upload/datasets/:id/items", requireUser, async (req, res): Promise<void> => {
   const contribDatasetId = Number(req.params.id);
   const { items } = req.body ?? {};
   if (!Number.isFinite(contribDatasetId)) {
@@ -57,6 +58,11 @@ router.post("/upload/datasets/:id/items", async (req, res): Promise<void> => {
 
   if (!contribDataset) {
     res.status(404).json({ error: "Contributor dataset not found" });
+    return;
+  }
+  // Token-aware ownership guard: only enforce when the caller is authenticated.
+  if (req.userId != null && contribDataset.userId !== req.userId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
   if (contribDataset.status !== "pending") {
@@ -99,7 +105,7 @@ router.post("/upload/datasets/:id/items", async (req, res): Promise<void> => {
   res.status(201).json({ inserted: inserted.length, totalItems: newTotal });
 });
 
-router.post("/upload/datasets/:id/submit", async (req, res): Promise<void> => {
+router.post("/upload/datasets/:id/submit", requireUser, async (req, res): Promise<void> => {
   const contribDatasetId = Number(req.params.id);
   if (!Number.isFinite(contribDatasetId)) {
     res.status(400).json({ error: "Invalid contributor dataset ID" });
@@ -113,6 +119,11 @@ router.post("/upload/datasets/:id/submit", async (req, res): Promise<void> => {
 
   if (!contribDataset) {
     res.status(404).json({ error: "Contributor dataset not found" });
+    return;
+  }
+  // Token-aware ownership guard: only enforce when the caller is authenticated.
+  if (req.userId != null && contribDataset.userId !== req.userId) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
   if (contribDataset.status !== "pending") {

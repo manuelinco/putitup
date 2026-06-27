@@ -37,11 +37,46 @@ async function runAppMigrations() {
         ADD COLUMN IF NOT EXISTS stripe_subscription_id  text,
         ADD COLUMN IF NOT EXISTS plan                    text NOT NULL DEFAULT 'free';
     `);
+
+    // M-2: anti-replay store for Telegram initData. Safe & idempotent — this is
+    // the migration the production (Neon) DB needs before the token-auth backend
+    // can serve POST /auth/telegram/validate, so it is applied here on every boot
+    // rather than requiring manual psql access to production.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS used_init_data (
+        hash       text PRIMARY KEY,
+        expires_at timestamptz NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS used_init_data_expires_idx ON used_init_data (expires_at);
+    `);
+
     logger.info("App migrations OK");
   } catch (err) {
     logger.warn({ err }, "App migrations warning (non-fatal)");
   } finally {
     client.release();
+  }
+
+  // H-2: hard duplicate guard on task_responses, applied in its own isolated
+  // transaction. Best-effort & non-fatal: a live DB that already contains
+  // duplicate (user_id, task_id) rows from the pre-fix race will reject the
+  // unique index — that is fine, because the per-user row lock + in-transaction
+  // duplicate check in POST /responses already prevent NEW duplicates. The hard
+  // constraint just adds defence-in-depth once any legacy duplicates are removed.
+  const uqClient = await pool.connect();
+  try {
+    await uqClient.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS task_responses_user_task_unique
+        ON task_responses (user_id, task_id);
+    `);
+    logger.info("task_responses unique index OK");
+  } catch (err) {
+    logger.warn(
+      { err },
+      "task_responses unique index skipped (likely existing duplicate rows) — manual dedupe needed to enable the hard constraint",
+    );
+  } finally {
+    uqClient.release();
   }
 }
 
