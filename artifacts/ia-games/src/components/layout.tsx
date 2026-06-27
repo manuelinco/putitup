@@ -21,7 +21,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Header */}
         <header className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 bg-background/80 backdrop-blur-md border-b border-border/30">
           <div className="flex items-center gap-2">
-            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="PUTITUP" className="w-7 h-7 object-contain [mix-blend-mode:screen]" />
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="PUTITUP" className="w-7 h-7 object-contain rounded-lg" />
             <span className="font-black text-base tracking-tight uppercase bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               PUTITUP
             </span>
