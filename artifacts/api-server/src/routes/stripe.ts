@@ -7,38 +7,31 @@ const router: IRouter = Router();
 // List all active products with their prices (for pricing page)
 router.get("/stripe/products", async (_req, res): Promise<void> => {
   try {
-    const rows = await stripeStorage.listProductsWithPrices();
+    const stripe = await getUncachableStripeClient();
+    const [products, prices] = await Promise.all([
+      stripe.products.list({ active: true, limit: 100 }),
+      stripe.prices.list({ active: true, limit: 100 }),
+    ]);
 
-    const map = new Map<string, {
-      id: string; name: string; description: string | null;
-      metadata: Record<string, string>; prices: { id: string; unit_amount: number; currency: string; interval: string | null }[];
-    }>();
+    const result = products.data.map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description ?? null,
+      metadata: (product.metadata ?? {}) as Record<string, string>,
+      prices: prices.data
+        .filter((p) => p.product === product.id)
+        .map((p) => ({
+          id: p.id,
+          unit_amount: p.unit_amount ?? 0,
+          currency: p.currency,
+          interval: p.recurring?.interval ?? null,
+        })),
+    }));
 
-    for (const row of rows as Record<string, unknown>[]) {
-      const pid = row.product_id as string;
-      if (!map.has(pid)) {
-        map.set(pid, {
-          id: pid,
-          name: row.product_name as string,
-          description: (row.product_description as string | null) ?? null,
-          metadata: (row.product_metadata as Record<string, string>) ?? {},
-          prices: [],
-        });
-      }
-      if (row.price_id) {
-        const recurring = row.recurring as { interval?: string } | null;
-        map.get(pid)!.prices.push({
-          id: row.price_id as string,
-          unit_amount: row.unit_amount as number,
-          currency: row.currency as string,
-          interval: recurring?.interval ?? null,
-        });
-      }
-    }
-
-    res.json({ products: Array.from(map.values()) });
-  } catch (err) {
-    res.status(500).json({ error: "Could not load products" });
+    res.json({ products: result });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Could not load products";
+    res.status(500).json({ error: msg });
   }
 });
 
