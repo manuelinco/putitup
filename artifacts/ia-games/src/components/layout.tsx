@@ -35,7 +35,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <span className="text-xs font-black text-secondary">{user.points.toLocaleString()}</span>
                 <span className="text-[9px] text-muted-foreground">pts</span>
               </div>
-              {user.isAdmin && (
+              {(user.isAdmin || user.isSupervisor) && (
                 <Link href="/controller">
                   <button className="p-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 transition-colors" title="Review Queue">
                     <Eye className="w-3.5 h-3.5 text-primary" />

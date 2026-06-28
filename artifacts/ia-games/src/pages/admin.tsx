@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   useGetAnalyticsSummary,
-  useListUsers,
   useCreateDataset,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/auth";
@@ -34,6 +33,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import { API_BASE } from "@/lib/api";
 import { getSessionToken } from "@/lib/session";
 
@@ -141,7 +141,6 @@ interface AntibotConfig {
 
 export default function Admin() {
   const { data: analytics } = useGetAnalyticsSummary();
-  const { data: users } = useListUsers({ limit: 20 });
   const createDataset = useCreateDataset();
 
   const [activeSection, setActiveSection] = useState<ActiveSection>("stats");
@@ -153,6 +152,8 @@ export default function Admin() {
   const [approvalResult, setApprovalResult] = useState<string | null>(null);
   const [allDatasets, setAllDatasets] = useState<{id: number; name: string; status: string; recordCount: number | null}[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(false);
+  const [justApprovedDs, setJustApprovedDs] = useState<Set<number>>(new Set());
+  const [removedDs, setRemovedDs] = useState<Set<number>>(new Set());
 
   const [minipimer, setMinipimer] = useState<{id: number; name: string; category: string; status: string; approvedTasks: number; totalTasks: number; readyToExport: boolean}[]>([]);
   const [minipimerLoading, setMinipimerLoading] = useState(false);
@@ -349,6 +350,17 @@ export default function Admin() {
         body: JSON.stringify({ adminId: 1 }),
       });
       setApprovalResult(`Dataset #${id} pubblicato. Pagamenti creati: ${result.pendingPaymentsCreated}`);
+      // Flash the card RED with an "APPROVATO" badge, then drop it from the queue
+      // (mirrors the Controller review queue behaviour).
+      setJustApprovedDs((prev) => new Set(prev).add(id));
+      setTimeout(() => {
+        setRemovedDs((prev) => new Set(prev).add(id));
+        setJustApprovedDs((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }, 1200);
     } catch (e: any) {
       setApprovalResult(`Errore: ${e.message}`);
     }
@@ -887,8 +899,10 @@ export default function Admin() {
               <div className="text-xs text-muted-foreground text-center py-4">Loading datasets…</div>
             )}
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {(allDatasets.length > 0 ? allDatasets : Array.from({length: 20}, (_, i) => ({id: i + 10, name: `Dataset #${i + 10}`, status: 'active', recordCount: 1000000}))).map((ds) => (
-                <Card key={ds.id} className="border-border/40">
+              {(allDatasets.length > 0 ? allDatasets : Array.from({length: 20}, (_, i) => ({id: i + 10, name: `Dataset #${i + 10}`, status: 'active', recordCount: 1000000})))
+                .filter((ds) => !removedDs.has(ds.id))
+                .map((ds) => (
+                <Card key={ds.id} className={cn("border-border/40", justApprovedDs.has(ds.id) && "border-red-500/60 bg-red-500/10")}>
                   <CardContent className="p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div>
@@ -897,15 +911,21 @@ export default function Admin() {
                           #{ds.id} · {(ds.recordCount ?? 0).toLocaleString()} tasks · {ds.status}
                         </p>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
-                        onClick={() => handleApproveDataset(ds.id)}
-                      >
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Approve
-                      </Button>
+                      {justApprovedDs.has(ds.id) ? (
+                        <Badge variant="outline" className="text-[10px] font-black text-red-400 border-red-500/60 bg-red-500/10">
+                          APPROVATO
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs border-secondary/40 text-secondary hover:bg-secondary/10"
+                          onClick={() => handleApproveDataset(ds.id)}
+                        >
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Approve
+                        </Button>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <a
@@ -1026,41 +1046,120 @@ export default function Admin() {
           </div>
         )}
 
-        {/* ─── USERS ─────────────────────────────────── */}
+        {/* ─── USERS / RUOLI ─────────────────────────── */}
         {activeSection === "users" && (
-          <Card className="border-border/50">
-            <CardHeader className="p-3 pb-2 border-b border-border/30">
-              <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
-                <Users className="w-3.5 h-3.5" />
-                All Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 divide-y divide-border/20 max-h-[60vh] overflow-y-auto">
-              {users?.map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-3">
-                  <div>
-                    <p className="text-sm font-bold">{user.username}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono">
-                      #{user.telegramId ?? "—"} · ref: {(user as any).referralCode ?? "—"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <Badge
-                      variant="outline"
-                      className={cn("text-[9px]",
-                        user.level === "expert" ? "text-yellow-400 border-yellow-400/40" :
-                        user.level === "pro" ? "text-primary border-primary/40" :
-                        "text-muted-foreground"
-                      )}
-                    >
-                      {user.level}
-                    </Badge>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{user.points.toLocaleString()} pts</p>
-                  </div>
+          <div className="space-y-3">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader className="p-3 pb-1">
+                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
+                  <UserCog className="w-3.5 h-3.5" />
+                  Gestione Ruoli
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-1">
+                <p className="text-[10px] text-muted-foreground mb-2 leading-snug">
+                  Promuovi un utente esistente a <strong className="text-secondary">Supervisor</strong> (revisione task)
+                  o <strong className="text-accent">Moderatore</strong> (chat). Cerca per nome utente.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={roleSearch}
+                    onChange={(e) => setRoleSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") loadRoleUsers(roleSearch); }}
+                    placeholder="Cerca utente…"
+                    className="flex-1 h-8 text-xs bg-muted/50 border-border/40"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => loadRoleUsers(roleSearch)}
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
+              </CardContent>
+            </Card>
+
+            {roleLoading && <Skeleton className="h-32 w-full rounded-xl" />}
+
+            {!roleLoading && roleUsers.length === 0 && (
+              <Card className="border-border/30">
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  Nessun utente trovato.
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="space-y-2">
+              {roleUsers.map((u) => (
+                <Card key={u.id} className="border-border/30">
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate">{u.username}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          id {u.id} · tg {u.telegramId ?? "—"} · {u.points.toLocaleString()} pts
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                        {u.isAdmin && (
+                          <Badge variant="outline" className="text-[9px] text-primary border-primary/40">ADMIN</Badge>
+                        )}
+                        {u.isSupervisor && (
+                          <Badge variant="outline" className="text-[9px] text-secondary border-secondary/40">SUPERVISOR</Badge>
+                        )}
+                        {u.isModerator && (
+                          <Badge variant="outline" className="text-[9px] text-accent border-accent/40">MOD</Badge>
+                        )}
+                        {!u.isAdmin && !u.isSupervisor && !u.isModerator && (
+                          <Badge variant="outline" className="text-[9px] text-muted-foreground">utente</Badge>
+                        )}
+                      </div>
+                    </div>
+                    {u.isAdmin ? (
+                      <p className="text-[10px] text-muted-foreground text-center py-1">
+                        L'admin ha già tutti i permessi.
+                      </p>
+                    ) : (
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={roleBusy === u.id}
+                          className={cn(
+                            "flex-1 h-7 text-[10px]",
+                            u.isSupervisor
+                              ? "text-red-400 border-red-400/40 hover:bg-red-400/10"
+                              : "text-secondary border-secondary/40 hover:bg-secondary/10",
+                          )}
+                          onClick={() => handleSetRole(u.id, "supervisor", !u.isSupervisor)}
+                        >
+                          <ShieldCheck className="w-3 h-3 mr-1" />
+                          {roleBusy === u.id ? "…" : u.isSupervisor ? "Rimuovi Supervisor" : "Rendi Supervisor"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={roleBusy === u.id}
+                          className={cn(
+                            "flex-1 h-7 text-[10px]",
+                            u.isModerator
+                              ? "text-red-400 border-red-400/40 hover:bg-red-400/10"
+                              : "text-accent border-accent/40 hover:bg-accent/10",
+                          )}
+                          onClick={() => handleSetRole(u.id, "moderator", !u.isModerator)}
+                        >
+                          <UserCog className="w-3 h-3 mr-1" />
+                          {roleBusy === u.id ? "…" : u.isModerator ? "Rimuovi Mod" : "Rendi Mod"}
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
 
         {/* ─── BOT WATCH ─────────────────────────────────── */}

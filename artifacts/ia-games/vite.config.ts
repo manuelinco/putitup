@@ -15,6 +15,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // Self-destroying SW: unregisters any previously installed service worker
+      // and clears its caches, then stays out of the way so every load is fresh
+      // from the network. The Telegram Mini App is always online, so this trades
+      // offline caching for the guarantee that new deploys are visible
+      // immediately (no stale precached navigation served from an old build).
+      selfDestroying: true,
       registerType: "autoUpdate",
       injectRegister: "auto",
       workbox: {
