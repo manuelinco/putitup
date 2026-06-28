@@ -753,10 +753,11 @@ router.post("/tasks/:id/report", requireUser, async (req, res): Promise<void> =>
 });
 
 // Admin/supervisor: list reports (default status=pending).
-router.get("/tasks/reports", async (req, res): Promise<void> => {
-  const reviewerId = Number(
-    req.query["userId"] ?? req.query["reviewerUserId"] ?? req.headers["x-user-id"],
-  );
+router.get("/tasks/reports", requireUser, async (req, res): Promise<void> => {
+  // Identity comes from requireUser (Bearer session token when present; soft
+  // fallback to the supplied id during the AUTH_ENFORCE rollout). We never trust
+  // a reviewer id read straight from query/body for authorization.
+  const reviewerId = req.userId ?? NaN;
   if (!Number.isFinite(reviewerId) || reviewerId <= 0) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -780,20 +781,21 @@ router.get("/tasks/reports", async (req, res): Promise<void> => {
 });
 
 // Admin/supervisor: resolve a report (approve / reject).
-router.patch("/tasks/reports/:id", async (req, res): Promise<void> => {
+router.patch("/tasks/reports/:id", requireUser, async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id) || id <= 0) {
     res.status(400).json({ error: "Invalid report id" });
     return;
   }
-  const { status, reviewerUserId } = (req.body ?? {}) as Record<string, unknown>;
+  const { status } = (req.body ?? {}) as Record<string, unknown>;
   if (status !== "approved" && status !== "rejected") {
     res.status(400).json({ error: "status must be 'approved' or 'rejected'" });
     return;
   }
-  const reviewerId = Number(reviewerUserId);
+  // Authenticated reviewer (token-bound when present; soft fallback otherwise).
+  const reviewerId = req.userId ?? NaN;
   if (!Number.isFinite(reviewerId) || reviewerId <= 0) {
-    res.status(400).json({ error: "reviewerUserId is required" });
+    res.status(401).json({ error: "Authentication required" });
     return;
   }
   const [actor] = await db

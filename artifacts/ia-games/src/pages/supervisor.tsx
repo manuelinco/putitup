@@ -9,11 +9,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle, Eye, Shield, Loader2, RefreshCw, Inbox, Plus, X, RotateCcw, Flag, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE } from "@/lib/api";
+import { getSessionToken } from "@/lib/session";
 
 async function apiFetch(path: string, options?: RequestInit) {
+  const token = getSessionToken();
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers ?? {}),
+    },
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);
@@ -80,7 +86,7 @@ export default function Controller() {
       setBasketTasks(bk ?? []);
       if (user?.id) {
         const rp = await apiFetch(
-          `/api/tasks/reports?status=pending&reviewerUserId=${user.id}`,
+          `/api/tasks/reports?status=pending&userId=${user.id}`,
         ).catch(() => null);
         const list = Array.isArray(rp) ? rp : (rp?.reports ?? []);
         setReports(list);
@@ -99,7 +105,7 @@ export default function Controller() {
     return null;
   }
 
-  if (!user.isAdmin) {
+  if (!user.isAdmin && !user.isSupervisor) {
     return (
       <Layout>
         <div className="p-4 flex items-center justify-center min-h-[60vh]">
@@ -154,7 +160,7 @@ export default function Controller() {
     try {
       await apiFetch(`/api/tasks/reports/${reportId}`, {
         method: "PATCH",
-        body: JSON.stringify({ status, reviewerUserId: user.id }),
+        body: JSON.stringify({ status, userId: user.id }),
       });
       setReports((prev) => prev.filter((r) => r.id !== reportId));
     } catch (e: any) {

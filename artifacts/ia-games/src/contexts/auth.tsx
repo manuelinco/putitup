@@ -15,6 +15,8 @@ export interface AuthUser {
   xp: number;
   streak: number;
   isAdmin: boolean;
+  isSupervisor?: boolean;
+  isModerator?: boolean;
   avatarUrl?: string | null;
   score: number;
 }

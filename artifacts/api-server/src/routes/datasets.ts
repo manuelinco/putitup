@@ -385,7 +385,8 @@ router.post("/datasets/:id/minipimer/push", requireAdmin, async (req, res): Prom
     const [current] = await tx
       .select()
       .from(datasetsTable)
-      .where(eq(datasetsTable.id, id));
+      .where(eq(datasetsTable.id, id))
+      .for("update");
 
     const [{ c: approved }] = await tx
       .select({ c: sql<number>`count(*)::int` })
