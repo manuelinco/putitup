@@ -120,10 +120,10 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
         body: JSON.stringify({ tasksPerDataset: 20, dryRun }),
       });
       const data = await res.json();
-      setAgentMsg(dryRun ? `Dry run OK — avrebbe creato task su ${data.datasetIds} dataset` : "Agent avviato in background");
+      setAgentMsg(dryRun ? `Dry run OK — would have created tasks on ${data.datasetIds} datasets` : "Agent started in the background");
       setTimeout(() => { load(); setAgentMsg(null); }, 5000);
     } catch {
-      setAgentMsg("Errore di connessione");
+      setAgentMsg("Connection error");
     } finally {
       setRunningAgent(false);
     }
@@ -142,22 +142,22 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold">Platform Admin</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Pannello di controllo riservato agli amministratori</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Control panel reserved for administrators</p>
         </div>
         <Button size="sm" variant="outline" className="gap-2" onClick={load}>
-          <RefreshCw className="h-3.5 w-3.5" /> Aggiorna
+          <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </Button>
       </div>
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {stats && [
-          { label: "Utenti totali", value: stats.totalUsers.toLocaleString("it-IT"), icon: Users },
-          { label: "Task generati", value: stats.totalTasks.toLocaleString("it-IT"), icon: Database },
-          { label: "Risposte", value: stats.totalResponses.toLocaleString("it-IT"), icon: Activity },
-          { label: "Dataset attivi", value: stats.totalDatasets.toString(), icon: BarChart3 },
-          { label: "Pagamenti pending", value: stats.pendingPayments.toString(), icon: Zap },
-          { label: "TON pagati", value: `${stats.totalPaidTon.toFixed(4)} TON`, icon: ShieldCheck },
+          { label: "Total users", value: stats.totalUsers.toLocaleString("en-US"), icon: Users },
+          { label: "Tasks generated", value: stats.totalTasks.toLocaleString("en-US"), icon: Database },
+          { label: "Responses", value: stats.totalResponses.toLocaleString("en-US"), icon: Activity },
+          { label: "Active datasets", value: stats.totalDatasets.toString(), icon: BarChart3 },
+          { label: "Pending payments", value: stats.pendingPayments.toString(), icon: Zap },
+          { label: "TON paid", value: `${stats.totalPaidTon.toFixed(4)} TON`, icon: ShieldCheck },
         ].map(({ label, value, icon: Icon }) => (
           <Card key={label} className="border-border bg-card">
             <CardContent className="p-4">
@@ -184,7 +184,7 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
               <div className="flex items-center gap-2">
                 <div className={`h-2 w-2 rounded-full ${agentStatus?.running ? "bg-green-400 animate-pulse" : "bg-muted"}`} />
                 <span className="text-sm font-medium">
-                  {agentStatus?.running ? "In esecuzione" : "In attesa"}
+                  {agentStatus?.running ? "Running" : "Idle"}
                 </span>
               </div>
               <Badge variant="outline" className={`text-[10px] ${agentStatus?.groqEnabled ? "border-green-500/40 text-green-400" : "border-muted text-muted-foreground"}`}>
@@ -193,11 +193,11 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
             </div>
             {agentStatus?.lastRun && (
               <div className="text-xs text-muted-foreground space-y-0.5">
-                <p>Ultimo run: {new Date(agentStatus.lastRun.startedAt).toLocaleString("it-IT")}</p>
-                <p>Dataset processati: <span className="text-foreground font-medium">{agentStatus.lastRun.datasetsProcessed}</span></p>
-                <p>Task creati: <span className="text-foreground font-medium">{agentStatus.lastRun.tasksCreated}</span></p>
+                <p>Last run: {new Date(agentStatus.lastRun.startedAt).toLocaleString("en-US")}</p>
+                <p>Datasets processed: <span className="text-foreground font-medium">{agentStatus.lastRun.datasetsProcessed}</span></p>
+                <p>Tasks created: <span className="text-foreground font-medium">{agentStatus.lastRun.tasksCreated}</span></p>
                 {agentStatus.lastRun.errors.length > 0 && (
-                  <p className="text-destructive">{agentStatus.lastRun.errors.length} errori</p>
+                  <p className="text-destructive">{agentStatus.lastRun.errors.length} errors</p>
                 )}
               </div>
             )}
@@ -233,7 +233,7 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
                 <div>
                   <p className="text-sm font-medium leading-none">{d.name}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    #{d.id} · {d.category} · {(d.requestedTaskCount ?? 0).toLocaleString("it-IT")} task target
+                    #{d.id} · {d.category} · {(d.requestedTaskCount ?? 0).toLocaleString("en-US")} task target
                   </p>
                 </div>
                 <Badge
@@ -252,12 +252,12 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
       <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <h3 className="font-semibold flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" /> Clienti business ({clients.length})
+            <Users className="h-4 w-4 text-primary" /> Business clients ({clients.length})
           </h3>
         </CardHeader>
         <CardContent className="p-0">
           {clients.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">Nessun cliente registrato.</p>
+            <p className="px-5 py-6 text-sm text-muted-foreground">No registered clients.</p>
           ) : (
             <div className="divide-y divide-border max-h-80 overflow-y-auto">
               {clients.map((c) => (
@@ -267,12 +267,12 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
                       {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email}
                     </p>
                     <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                      {c.email}{c.company ? ` · ${c.company}` : ""} · {(c.tokenBalance ?? 0).toLocaleString("it-IT")} token
+                      {c.email}{c.company ? ` · ${c.company}` : ""} · {(c.tokenBalance ?? 0).toLocaleString("en-US")} tokens
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {c.isBlocked && (
-                      <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">Bloccato</Badge>
+                      <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">Blocked</Badge>
                     )}
                     <Badge variant="outline" className="text-[10px] border-primary/40 text-primary uppercase">
                       {c.plan ?? "free"}
@@ -289,12 +289,12 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
       <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <h3 className="font-semibold flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-primary" /> Vendite & accessi ({sales.length})
+            <ShoppingCart className="h-4 w-4 text-primary" /> Sales & access ({sales.length})
           </h3>
         </CardHeader>
         <CardContent className="p-0">
           {sales.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">Nessuna vendita registrata.</p>
+            <p className="px-5 py-6 text-sm text-muted-foreground">No sales recorded.</p>
           ) : (
             <div className="divide-y divide-border max-h-80 overflow-y-auto">
               {sales.map((s) => (
@@ -302,14 +302,14 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium leading-none truncate">{s.datasetName ?? "Dataset"}</p>
                     <p className="text-[10px] text-muted-foreground mt-1 truncate">
-                      {s.clientEmail ?? "—"}{s.clientCompany ? ` · ${s.clientCompany}` : ""} · {new Date(s.createdAt).toLocaleDateString("it-IT")}
+                      {s.clientEmail ?? "—"}{s.clientCompany ? ` · ${s.clientCompany}` : ""} · {new Date(s.createdAt).toLocaleDateString("en-US")}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold">
                       {s.method === "tokens"
-                        ? `${(s.tokensSpent ?? 0).toLocaleString("it-IT")} token`
-                        : `€${((s.amountPaidCents ?? 0) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2 })}`}
+                        ? `${(s.tokensSpent ?? 0).toLocaleString("en-US")} tokens`
+                        : `€${((s.amountPaidCents ?? 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
                     </p>
                     <p className="text-[10px] text-muted-foreground uppercase">{s.status}</p>
                   </div>
@@ -324,12 +324,12 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
       <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <h3 className="font-semibold flex items-center gap-2">
-            <Mail className="h-4 w-4 text-primary" /> Messaggi di contatto ({messages.length})
+            <Mail className="h-4 w-4 text-primary" /> Contact messages ({messages.length})
           </h3>
         </CardHeader>
         <CardContent className="p-0">
           {messages.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted-foreground">Nessun messaggio ricevuto.</p>
+            <p className="px-5 py-6 text-sm text-muted-foreground">No messages received.</p>
           ) : (
             <div className="divide-y divide-border max-h-96 overflow-y-auto">
               {messages.map((m) => (
@@ -339,7 +339,7 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
                       {m.name}{m.company ? ` · ${m.company}` : ""}
                     </p>
                     <span className="text-[10px] text-muted-foreground shrink-0">
-                      {new Date(m.createdAt).toLocaleString("it-IT")}
+                      {new Date(m.createdAt).toLocaleString("en-US")}
                     </span>
                   </div>
                   <a href={`mailto:${m.email}`} className="text-[10px] text-primary hover:underline">{m.email}</a>

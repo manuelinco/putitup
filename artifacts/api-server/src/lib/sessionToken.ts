@@ -16,7 +16,7 @@ const SESSION_SECRET = (() => {
 
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export type SessionSource = "telegram" | "wallet";
+export type SessionSource = "telegram" | "wallet" | "staff" | "staff_pending";
 
 export interface SessionClaims {
   userId: number;
@@ -64,7 +64,13 @@ export function verifySessionToken(token: string): SessionClaims | null {
     const userId = Number(userIdStr);
     if (!Number.isFinite(userId) || userId <= 0) return null;
 
-    if (source !== "telegram" && source !== "wallet") return null;
+    if (
+      source !== "telegram" &&
+      source !== "wallet" &&
+      source !== "staff" &&
+      source !== "staff_pending"
+    )
+      return null;
 
     return { userId, source, exp };
   } catch {

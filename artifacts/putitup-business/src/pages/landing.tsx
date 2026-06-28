@@ -165,19 +165,19 @@ export default function Landing() {
 
   const statsDisplay = [
     {
-      label: "Record Validati",
+      label: "Validated Records",
       value: validatedValue,
     },
     {
-      label: "Contributori Attivi",
+      label: "Active Contributors",
       value: platformStats ? fmtNum(platformStats.totalContributors) : "—",
     },
     {
-      label: "Dataset Disponibili",
+      label: "Available Datasets",
       value: datasetsValue,
     },
     {
-      label: "Accuratezza Media",
+      label: "Average Accuracy",
       value: platformStats ? `${platformStats.avgAccuracy}%` : "99.1%",
     },
   ];
@@ -204,19 +204,19 @@ export default function Landing() {
             data
           </h1>
           <p className="mb-10 mx-auto max-w-2xl text-lg text-muted-foreground">
-            PUTITUP consegna dataset di training enterprise-grade, validati da migliaia di
-            contributor reali attraverso una pipeline di qualità a 3 livelli. Nessun bot.
-            Nessun rumore. Solo dati puliti e etichettati.
+            PUTITUP delivers enterprise-grade training datasets, validated by thousands of
+            real contributors through a 3-tier quality pipeline. No bots.
+            No noise. Just clean, labeled data.
           </p>
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link href="/register">
               <Button size="lg" className="gap-2 px-8">
-                Inizia Gratis <ArrowRight className="h-4 w-4" />
+                Get Started Free <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <Link href="/catalog">
               <Button size="lg" variant="outline" className="gap-2 px-8">
-                Sfoglia i Dataset
+                Browse Datasets
               </Button>
             </Link>
           </div>

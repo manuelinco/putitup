@@ -21,7 +21,7 @@ export interface AuthUser {
   score: number;
 }
 
-export type AuthSource = "telegram" | "wallet" | "none";
+export type AuthSource = "telegram" | "wallet" | "staff" | "none";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -38,6 +38,7 @@ interface AuthContextValue {
   completeRegistration: (username: string) => Promise<void>;
   cancelRegistration: () => void;
   refreshUser: () => Promise<void>;
+  loginStaff: (user: AuthUser, token: string) => void;
   logout: () => void;
 }
 
@@ -386,6 +387,21 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
     setPendingTelegramId(null);
   }, [pendingWallet, pendingTelegramId, setAndCacheUser]);
 
+  /**
+   * Log in as staff (admin/supervisor) using an email+password session token
+   * issued by POST /api/staff/login. Overwrites the current session identity.
+   */
+  const loginStaff = useCallback((u: AuthUser, token: string) => {
+    saveSessionToken(token);
+    setAndCacheUser(u);
+    setSource("staff");
+    saveSession(u.id, "staff");
+    setNeedsNickname(false);
+    setNeedsWalletConnect(false);
+    setPendingWallet(null);
+    setPendingTelegramId(null);
+  }, [setAndCacheUser]);
+
   const skipWalletConnect = useCallback(() => {
     setNeedsWalletConnect(false);
     setNeedsNickname(true);
@@ -411,7 +427,7 @@ function AuthContextProvider({ children }: { children: React.ReactNode }) {
       user, source, isLoading, needsWalletConnect, needsNickname,
       pendingWallet, pendingTelegramId, wallet,
       connectWallet, disconnectWallet, skipWalletConnect,
-      completeRegistration, cancelRegistration, refreshUser, logout,
+      completeRegistration, cancelRegistration, refreshUser, loginStaff, logout,
     }}>
       {children}
     </AuthContext.Provider>

@@ -64,6 +64,7 @@ export default function Controller() {
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState<number | null>(null);
   const [adminApproving, setAdminApproving] = useState<number | null>(null);
+  const [justApproved, setJustApproved] = useState<Set<number>>(new Set());
   const [tab, setTab] = useState<Tab>("controller");
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [resolvingReport, setResolvingReport] = useState<number | null>(null);
@@ -100,6 +101,19 @@ export default function Controller() {
     loadTasks();
   }, [loadTasks]);
 
+  // Flash the card RED with an "APPROVATO" badge, then drop it from the queue.
+  const flashApproved = useCallback((taskId: number) => {
+    setJustApproved((prev) => new Set(prev).add(taskId));
+    setTimeout(() => {
+      setJustApproved((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+      loadTasks();
+    }, 1200);
+  }, [loadTasks]);
+
   if (!user) {
     navigate("/");
     return null;
@@ -130,7 +144,7 @@ export default function Controller() {
         method: "PATCH",
         body: JSON.stringify({ supervisorId: user.id }),
       });
-      await loadTasks();
+      flashApproved(taskId);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -146,7 +160,7 @@ export default function Controller() {
         method: "PATCH",
         body: JSON.stringify({ adminId: user.id }),
       });
-      await loadTasks();
+      flashApproved(taskId);
     } catch (e: any) {
       alert(e.message);
     } finally {
@@ -503,7 +517,10 @@ export default function Controller() {
               const isApprovingAd = adminApproving === task.id;
 
               return (
-                <Card key={task.id} className="border-border/50">
+                <Card key={task.id} className={cn(
+                  "border-border/50",
+                  justApproved.has(task.id) && "border-red-500/60 bg-red-500/10",
+                )}>
                   <CardContent className="p-4 space-y-3">
                     {/* Meta */}
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -555,7 +572,11 @@ export default function Controller() {
                     </div>
 
                     {/* Action */}
-                    {tab === "controller" ? (
+                    {justApproved.has(task.id) ? (
+                      <div className="w-full h-10 flex items-center justify-center rounded-md bg-red-500/20 border border-red-500/50 text-red-400 font-black text-sm tracking-wide">
+                        <CheckCircle className="w-4 h-4 mr-2" /> APPROVATO
+                      </div>
+                    ) : tab === "controller" ? (
                       <Button
                         className="w-full h-10 font-bold text-sm"
                         onClick={() => handleControllerApprove(task.id)}

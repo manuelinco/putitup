@@ -27,7 +27,7 @@ export default function AdminLogin() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Credenziali non valide");
+        setError(data.error ?? "Invalid credentials");
         return;
       }
       localStorage.setItem("pb_admin_token", data.token);
@@ -39,7 +39,7 @@ export default function AdminLogin() {
       window.dispatchEvent(new Event("storage"));
       navigate("/dashboard");
     } catch {
-      setError("Errore di connessione");
+      setError("Connection error");
     } finally {
       setLoading(false);
     }
@@ -61,8 +61,8 @@ export default function AdminLogin() {
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
             <ShieldAlert className="h-6 w-6 text-destructive" />
           </div>
-          <h1 className="text-xl font-bold">Accesso Admin</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Area riservata · Solo uso interno</p>
+          <h1 className="text-xl font-bold">Admin Access</h1>
+          <p className="mt-1 text-xs text-muted-foreground">Restricted area · Internal use only</p>
         </CardHeader>
         <CardContent>
           {error && (
@@ -85,7 +85,7 @@ export default function AdminLogin() {
               </div>
             </div>
             <Button type="submit" variant="destructive" className="w-full" disabled={loading || !username || !password}>
-              {loading ? "Accesso…" : "Accedi come Admin"}
+              {loading ? "Signing in…" : "Sign in as Admin"}
             </Button>
           </form>
         </CardContent>

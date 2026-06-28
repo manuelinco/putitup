@@ -261,7 +261,7 @@ export default function DatasetDetail() {
   const description = isNumericId ? (liveDataset?.description ?? "") : (staticDataset?.description ?? "");
   const category = isNumericId ? (liveDataset?.category ?? "") : (staticDataset?.category ?? "");
   const rawQuality = isNumericId ? (liveDataset?.qualityScore ?? 0) : 0;
-  const accuracyLabel = rawQuality > 0 ? `${Number(rawQuality).toFixed(1)}%` : "In revisione";
+  const accuracyLabel = rawQuality > 0 ? `${Number(rawQuality).toFixed(1)}%` : "Under review";
   const samples = isNumericId
     ? ((liveDataset?.requestedTaskCount ?? liveDataset?.recordCount ?? 0) > 0
         ? (liveDataset?.requestedTaskCount ?? liveDataset?.recordCount)!.toLocaleString() + " tasks"

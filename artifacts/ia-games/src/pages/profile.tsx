@@ -19,6 +19,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Zap, Target, Star, Trophy, CheckCircle, TrendingUp, Wallet, LogOut, Flame, Coins, Gift, Copy, Users, MessageSquare } from "lucide-react";
 import { ContactForm } from "@/components/contact-form";
+import { StaffAccess } from "@/components/staff-access";
 import { cn } from "@/lib/utils";
 import { API_BASE } from "@/lib/api";
 
@@ -560,6 +561,9 @@ export default function Profile() {
             </CardContent>
           </Card>
         )}
+
+        {/* Staff access (admin / supervisor) */}
+        {isOwnProfile && <StaffAccess />}
       </div>
     </Layout>
   );

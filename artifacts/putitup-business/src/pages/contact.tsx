@@ -19,17 +19,17 @@ export default function Contact() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
             <MessageSquare className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold">Contattaci</h1>
+          <h1 className="text-3xl font-bold">Contact us</h1>
           <p className="mt-2 text-muted-foreground">
-            Hai una domanda, ti serve un dataset su misura o vuoi saperne di più sui nostri piani?
-            Ti rispondiamo entro 24 ore.
+            Have a question, need a custom dataset, or want to learn more about our plans?
+            We'll reply within 24 hours.
           </p>
         </div>
 
         <ContactForm />
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          Puoi anche scriverci a{" "}
+          You can also write to us at{" "}
           <a href="mailto:info@putitupbusiness.it" className="text-primary hover:underline font-medium">
             info@putitupbusiness.it
           </a>

@@ -32,23 +32,23 @@ interface UnlockedDataset {
 }
 
 const PLAN_LABELS: Record<string, { label: string; color: string; desc: string }> = {
-  free:     { label: "Free",     color: "bg-muted text-muted-foreground border-border",          desc: "5 dataset base/mese via ads" },
-  starter:  { label: "Starter",  color: "bg-blue-500/10 text-blue-400 border-blue-500/30",       desc: "Dataset base illimitati" },
-  business: { label: "Business", color: "bg-primary/10 text-primary border-primary/30",          desc: "Dataset premium + richieste custom" },
-  premium:  { label: "Premium",  color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30", desc: "Enterprise — tutto illimitato" },
+  free:     { label: "Free",     color: "bg-muted text-muted-foreground border-border",          desc: "5 base datasets/month via ads" },
+  starter:  { label: "Starter",  color: "bg-blue-500/10 text-blue-400 border-blue-500/30",       desc: "Unlimited base datasets" },
+  business: { label: "Business", color: "bg-primary/10 text-primary border-primary/30",          desc: "Premium datasets + custom requests" },
+  premium:  { label: "Premium",  color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/30", desc: "Enterprise — everything unlimited" },
 };
 
 const methodLabel: Record<string, string> = {
-  tokens: "Token",
-  payment: "Abbonamento",
-  free: "Gratuito",
-  ads: "Pubblicità",
+  tokens: "Tokens",
+  payment: "Subscription",
+  free: "Free",
+  ads: "Ads",
 };
 
 type Tab = "dataset" | "profilo" | "piano" | "admin";
 
 export default function Dashboard() {
-  const { client, logout, refresh } = useBusinessAuth();
+  const { client, loading, logout, refresh } = useBusinessAuth();
   const [, navigate] = useLocation();
   const [unlocked, setUnlocked] = useState<UnlockedDataset[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
@@ -85,8 +85,11 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    // Wait for the session to finish loading before deciding to redirect —
+    // otherwise we bounce to /login during the brief auth-check window.
+    if (loading) return;
     if (!client) { navigate("/login"); return; }
-    if (client.id === 0) return; // admin bypass — skip fetch
+    if (client.id === 0) { setLoadingDatasets(false); return; } // admin bypass — skip fetch
     fetch(`${API_BASE}/api/clients/${client.id}/datasets`, {
       headers: { Authorization: `Bearer ${localStorage.getItem("pb_session_token") ?? ""}` },
     })
@@ -94,8 +97,15 @@ export default function Dashboard() {
       .then((data) => setUnlocked(Array.isArray(data) ? data : []))
       .catch(() => setUnlocked([]))
       .finally(() => setLoadingDatasets(false));
-  }, [client]);
+  }, [client, loading]);
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Zap className="h-8 w-8 animate-pulse text-primary" />
+      </div>
+    );
+  }
   if (!client) return null;
 
   const tokenBalance = client.tokenBalance ?? 0;
@@ -121,7 +131,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <h1 className="text-2xl font-black">
-                  Ciao, {client.name.split(" ")[0]} 👋
+                  Hi, {client.name.split(" ")[0]} 👋
                 </h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {client.email}
@@ -136,10 +146,10 @@ export default function Dashboard() {
                 </Badge>
               )}
               <Badge variant="outline" className={`text-xs border ${planInfo.color}`}>
-                Piano {planInfo.label}
+                {planInfo.label} Plan
               </Badge>
               <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground" onClick={handleLogout}>
-                <LogOut className="h-4 w-4" /> Esci
+                <LogOut className="h-4 w-4" /> Log out
               </Button>
             </div>
           </div>
@@ -147,10 +157,10 @@ export default function Dashboard() {
           {/* Stats rapide */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
             {[
-              { label: "Dataset sbloccati", value: unlocked.length, icon: Database },
-              { label: "Token disponibili", value: tokenBalance, icon: Zap },
-              { label: "Ads guardati", value: totalAdsWatched, icon: BarChart3 },
-              { label: "Qualità media", value: "99%", icon: ShieldCheck },
+              { label: "Datasets unlocked", value: unlocked.length, icon: Database },
+              { label: "Tokens available", value: tokenBalance, icon: Zap },
+              { label: "Ads watched", value: totalAdsWatched, icon: BarChart3 },
+              { label: "Average quality", value: "99%", icon: ShieldCheck },
             ].map((s) => (
               <Card key={s.label} className="border-border bg-card">
                 <CardContent className="p-4">
@@ -170,7 +180,7 @@ export default function Dashboard() {
               <button key={t} onClick={() => setTab(t)}
                 className={`px-4 py-2 text-sm font-medium whitespace-nowrap capitalize transition-colors border-b-2 -mb-px
                   ${tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                {t === "dataset" ? "I miei Dataset" : t === "profilo" ? "Profilo" : t === "piano" ? "Piano & Accesso" : "⚙️ Admin"}
+                {t === "dataset" ? "My Datasets" : t === "profilo" ? "Profile" : t === "piano" ? "Plan & Access" : "⚙️ Admin"}
               </button>
             ))}
           </div>
@@ -181,8 +191,8 @@ export default function Dashboard() {
               <div className="lg:col-span-2">
                 <Card className="border-border bg-card">
                   <CardHeader className="pb-2">
-                    <h2 className="font-semibold">Dataset sbloccati</h2>
-                    <p className="text-xs text-muted-foreground">Scarica in CSV o JSON</p>
+                    <h2 className="font-semibold">Unlocked datasets</h2>
+                    <p className="text-xs text-muted-foreground">Download as CSV or JSON</p>
                   </CardHeader>
                   <CardContent>
                     {loadingDatasets ? (
@@ -192,11 +202,11 @@ export default function Dashboard() {
                     ) : unlocked.length === 0 ? (
                       <div className="text-center py-12 text-muted-foreground">
                         <Lock className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                        <p className="text-sm font-medium">Nessun dataset sbloccato</p>
-                        <p className="text-xs mt-1 mb-4">Guarda un annuncio o passa a un piano superiore per accedere ai dataset.</p>
+                        <p className="text-sm font-medium">No datasets unlocked</p>
+                        <p className="text-xs mt-1 mb-4">Watch an ad or upgrade to a higher plan to access datasets.</p>
                         <Link href="/catalog">
                           <Button size="sm" className="gap-2">
-                            Sfoglia il catalogo <ArrowUpRight className="h-3.5 w-3.5" />
+                            Browse the catalog <ArrowUpRight className="h-3.5 w-3.5" />
                           </Button>
                         </Link>
                       </div>
@@ -215,14 +225,14 @@ export default function Dashboard() {
                                 </p>
                                 <div className="flex items-center gap-2 mt-1.5">
                                   <span className="text-xs text-muted-foreground">
-                                    {new Date(entry.grantedAt).toLocaleDateString("it-IT")}
+                                    {new Date(entry.grantedAt).toLocaleDateString("en-US")}
                                   </span>
                                   <Badge variant="secondary" className="text-[10px] h-4">
                                     {methodLabel[entry.method] ?? entry.method}
                                   </Badge>
                                   {entry.dataset?.recordCount != null && (
                                     <span className="text-xs text-muted-foreground hidden sm:inline">
-                                      {entry.dataset.recordCount.toLocaleString("it-IT")} record
+                                      {entry.dataset.recordCount.toLocaleString("en-US")} records
                                     </span>
                                   )}
                                 </div>
@@ -246,7 +256,7 @@ export default function Dashboard() {
                       <div className="mt-4 pt-4 border-t border-border text-center">
                         <Link href="/catalog">
                           <Button variant="outline" size="sm" className="gap-2">
-                            Scopri altri dataset <ArrowUpRight className="h-3.5 w-3.5" />
+                            Discover more datasets <ArrowUpRight className="h-3.5 w-3.5" />
                           </Button>
                         </Link>
                       </div>
@@ -260,19 +270,19 @@ export default function Dashboard() {
                 <Card className="border-border bg-card">
                   <CardContent className="p-5">
                     <h3 className="font-semibold mb-3 flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-primary" /> Token disponibili
+                      <Zap className="h-4 w-4 text-primary" /> Tokens available
                     </h3>
                     <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-muted-foreground">Saldo attuale</span>
+                        <span className="text-xs text-muted-foreground">Current balance</span>
                         <span className="text-2xl font-black text-primary">{tokenBalance}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-2 mb-4">
-                        Ogni ad = 2 token · Sblocco dataset BASIC = 3 token
+                        Each ad = 2 tokens · Unlock BASIC dataset = 3 tokens
                       </p>
                       <Link href="/catalog">
                         <Button size="sm" className="w-full gap-2">
-                          <Zap className="h-3.5 w-3.5" /> Sblocca dataset
+                          <Zap className="h-3.5 w-3.5" /> Unlock datasets
                         </Button>
                       </Link>
                     </div>
@@ -281,11 +291,11 @@ export default function Dashboard() {
 
                 <Card className="border-border bg-card">
                   <CardContent className="p-5">
-                    <h3 className="font-semibold mb-3">Attività</h3>
+                    <h3 className="font-semibold mb-3">Activity</h3>
                     <div className="space-y-3">
                       <div>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">Dataset acceduti</span>
+                          <span className="text-muted-foreground">Datasets accessed</span>
                           <span className="font-medium">{unlocked.length}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -295,7 +305,7 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <div className="flex justify-between text-xs mb-1">
-                          <span className="text-muted-foreground">Ads guardati</span>
+                          <span className="text-muted-foreground">Ads watched</span>
                           <span className="font-medium">{totalAdsWatched}/30</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -315,8 +325,8 @@ export default function Dashboard() {
             <div className="max-w-lg">
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <h2 className="font-semibold">Informazioni account</h2>
-                  <p className="text-xs text-muted-foreground">I tuoi dati personali su PUTITUP Business</p>
+                  <h2 className="font-semibold">Account information</h2>
+                  <p className="text-xs text-muted-foreground">Your personal details on PUTITUP Business</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-background">
@@ -340,14 +350,14 @@ export default function Dashboard() {
                         <p className="text-sm font-medium">{client.email}</p>
                       </div>
                       <Badge variant="outline" className="ml-auto text-xs border-green-500/40 text-green-400">
-                        Verificata
+                        Verified
                       </Badge>
                     </div>
 
                     <div className="flex items-center gap-3 rounded-lg border border-border p-3">
                       <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <div>
-                        <p className="text-xs text-muted-foreground">Nome completo</p>
+                        <p className="text-xs text-muted-foreground">Full name</p>
                         <p className="text-sm font-medium">{client.name}</p>
                       </div>
                     </div>
@@ -356,7 +366,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-3 rounded-lg border border-border p-3">
                         <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <div>
-                          <p className="text-xs text-muted-foreground">Azienda</p>
+                          <p className="text-xs text-muted-foreground">Company</p>
                           <p className="text-sm font-medium">{client.company}</p>
                         </div>
                       </div>
@@ -365,14 +375,14 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3 rounded-lg border border-border p-3">
                       <ShieldCheck className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <div>
-                        <p className="text-xs text-muted-foreground">Autenticazione</p>
-                        <p className="text-sm font-medium">OTP via email — nessuna password</p>
+                        <p className="text-xs text-muted-foreground">Authentication</p>
+                        <p className="text-sm font-medium">OTP via email — no password</p>
                       </div>
                     </div>
                   </div>
 
                   <Button variant="destructive" size="sm" className="w-full gap-2 mt-2" onClick={handleLogout}>
-                    <LogOut className="h-4 w-4" /> Disconnetti account
+                    <LogOut className="h-4 w-4" /> Disconnect account
                   </Button>
                 </CardContent>
               </Card>
@@ -384,15 +394,15 @@ export default function Dashboard() {
             <div className="max-w-lg">
               <Card className="border-border bg-card">
                 <CardHeader>
-                  <h2 className="font-semibold">Il tuo piano</h2>
-                  <p className="text-xs text-muted-foreground">Accesso e limiti del tuo account</p>
+                  <h2 className="font-semibold">Your plan</h2>
+                  <p className="text-xs text-muted-foreground">Access and limits for your account</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Current plan */}
                   <div className={`rounded-xl border p-5 ${planInfo.color}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-lg font-black">Piano {planInfo.label}</span>
-                      <Badge className={`text-xs ${planInfo.color} border`}>Attivo</Badge>
+                      <span className="text-lg font-black">{planInfo.label} Plan</span>
+                      <Badge className={`text-xs ${planInfo.color} border`}>Active</Badge>
                     </div>
                     <p className="text-sm opacity-80">{planInfo.desc}</p>
                   </div>
@@ -400,12 +410,12 @@ export default function Dashboard() {
                   {/* Feature list */}
                   <div className="space-y-2">
                     {[
-                      { feature: "Dataset BASIC", ok: true },
-                      { feature: "Dataset MEDIUM", ok: plan === "business" || plan === "premium" },
-                      { feature: "Dataset PREMIUM", ok: plan === "premium" },
-                      { feature: "Richieste dataset custom", ok: plan === "business" || plan === "premium" },
-                      { feature: "Senza pubblicità", ok: plan !== "free" },
-                      { feature: "Supporto prioritario", ok: plan === "premium" },
+                      { feature: "BASIC datasets", ok: true },
+                      { feature: "MEDIUM datasets", ok: plan === "business" || plan === "premium" },
+                      { feature: "PREMIUM datasets", ok: plan === "premium" },
+                      { feature: "Custom dataset requests", ok: plan === "business" || plan === "premium" },
+                      { feature: "Ad-free", ok: plan !== "free" },
+                      { feature: "Priority support", ok: plan === "premium" },
                     ].map(({ feature, ok }) => (
                       <div key={feature} className="flex items-center gap-3 rounded-lg border border-border p-3">
                         <span className={`text-base ${ok ? "text-green-400" : "text-muted-foreground opacity-30"}`}>
@@ -420,7 +430,7 @@ export default function Dashboard() {
                     <Link href="/pricing">
                       <Button className="w-full gap-2 mt-2">
                         <ArrowUpRight className="h-4 w-4" />
-                        Passa a un piano superiore
+                        Upgrade to a higher plan
                       </Button>
                     </Link>
                   )}

@@ -7,6 +7,10 @@ import { AdChallenge } from "@/components/ad-challenge";
 
 type Phase = "human" | "loading" | "fallback";
 
+// Antibot (human-check) temporarily suspended per owner request — show the real
+// Adsgram ad immediately. Flip back to false to re-enable the red-dot check.
+const ANTIBOT_SUSPENDED = true;
+
 interface RewardedAdFlowProps {
   open: boolean;
   userId: number;
@@ -35,17 +39,23 @@ export function RewardedAdFlow({
 }: RewardedAdFlowProps) {
   const { showAd } = useAdsgram();
   const watchAd = useWatchAd();
-  const [phase, setPhase] = useState<Phase>("human");
+  const [phase, setPhase] = useState<Phase>(ANTIBOT_SUSPENDED ? "loading" : "human");
   const tokenRef = useRef<string | null>(null);
   const startRef = useRef<number>(0);
   const runningRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    tokenRef.current = null;
+    runningRef.current = false;
+    if (ANTIBOT_SUSPENDED) {
+      // Antibot suspended: go straight to the real Adsgram ad.
+      setPhase("loading");
+      void runAd();
+    } else {
       setPhase("human");
-      tokenRef.current = null;
-      runningRef.current = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
@@ -71,7 +81,7 @@ export function RewardedAdFlow({
     }
   };
 
-  const handleHumanPass = async () => {
+  const runAd = async () => {
     if (runningRef.current) return;
     runningRef.current = true;
     setPhase("loading");
@@ -102,9 +112,9 @@ export function RewardedAdFlow({
     }
   };
 
-  if (phase === "human") {
+  if (!ANTIBOT_SUSPENDED && phase === "human") {
     return (
-      <HumanCheck onPass={handleHumanPass} onFail={() => onFail("human_failed")} />
+      <HumanCheck onPass={runAd} onFail={() => onFail("human_failed")} />
     );
   }
 

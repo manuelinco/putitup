@@ -15,10 +15,10 @@ import { API_BASE } from "@/lib/api";
 const VALID_PLANS = ["free", "starter", "business", "premium"];
 
 const plans = [
-  { id: "free", label: "Free", price: "€0/mo", description: "5 dataset base/mese — 5 ad per download", highlight: "Senza carta" },
-  { id: "starter", label: "Starter", price: "€9.99/mo", description: "Dataset base illimitati, niente ads" },
-  { id: "business", label: "Business", price: "€19.99/mo", description: "Dataset premium + richieste custom", popular: true },
-  { id: "premium", label: "Premium", price: "Custom", description: "Enterprise: tutto illimitato + priorità" },
+  { id: "free", label: "Free", price: "€0/mo", description: "5 base datasets/month — 5 ads per download", highlight: "No card" },
+  { id: "starter", label: "Starter", price: "€9.99/mo", description: "Unlimited base datasets, no ads" },
+  { id: "business", label: "Business", price: "€19.99/mo", description: "Premium datasets + custom requests", popular: true },
+  { id: "premium", label: "Premium", price: "Custom", description: "Enterprise: everything unlimited + priority" },
 ];
 
 type Step = "dati" | "verifica";
@@ -85,8 +85,8 @@ export default function Register() {
 
   const handleSendCode = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (form.password.length < 8) { setError("La password deve avere almeno 8 caratteri"); return; }
-    if (form.password !== form.confirmPassword) { setError("Le password non corrispondono"); return; }
+    if (form.password.length < 8) { setError("Password must be at least 8 characters"); return; }
+    if (form.password !== form.confirmPassword) { setError("Passwords do not match"); return; }
     setError(null);
     setLoading(true);
     try {
@@ -96,7 +96,7 @@ export default function Register() {
         body: JSON.stringify({ email: form.email.trim().toLowerCase() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data.error ?? "Errore invio codice"); return; }
+      if (!res.ok) { setError(data.error ?? "Error sending code"); return; }
       setStep("verifica");
       startCooldown();
       if (data.devCode && data.devCode.length === 6) {
@@ -107,7 +107,7 @@ export default function Register() {
         setTimeout(() => codeRefs.current[0]?.focus(), 100);
       }
     } catch {
-      setError("Errore di connessione — riprova");
+      setError("Connection error — please try again");
     } finally {
       setLoading(false);
     }
@@ -148,7 +148,7 @@ export default function Register() {
       });
       const verifyData = await verifyRes.json().catch(() => ({}));
       if (!verifyRes.ok) {
-        setError(verifyData.error ?? "Codice non valido");
+        setError(verifyData.error ?? "Invalid code");
         setCode(["", "", "", "", "", ""]);
         setTimeout(() => codeRefs.current[0]?.focus(), 50);
         return;
@@ -181,15 +181,15 @@ export default function Register() {
         }),
       });
       const regData = await regRes.json().catch(() => ({}));
-      if (!regRes.ok) { setError(regData.error ?? "Errore durante la registrazione — riprova"); return; }
+      if (!regRes.ok) { setError(regData.error ?? "Error during registration — please try again"); return; }
       if (!regData.token || !regData.client) {
-        setError("Risposta del server non valida — riprova tra poco");
+        setError("Invalid server response — please try again shortly");
         return;
       }
 
       finishSession(regData);
     } catch {
-      setError("Errore di connessione — riprova");
+      setError("Connection error — please try again");
     } finally {
       setLoading(false);
     }
@@ -228,27 +228,27 @@ export default function Register() {
             <CheckCircle2 className="h-9 w-9 text-primary" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">Account creato!</h2>
+            <h2 className="text-2xl font-bold">Account created!</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Benvenuto su PUTITUP Business, {form.firstName}.
+              Welcome to PUTITUP Business, {form.firstName}.
             </p>
           </div>
           <div className="rounded-lg bg-muted px-4 py-3 text-sm text-left space-y-1">
-            <p><span className="font-semibold">Piano:</span> {form.plan.charAt(0).toUpperCase() + form.plan.slice(1)}</p>
+            <p><span className="font-semibold">Plan:</span> {form.plan.charAt(0).toUpperCase() + form.plan.slice(1)}</p>
             <p><span className="font-semibold">Email:</span> {form.email}</p>
           </div>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <div className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
             {form.plan === "starter" || form.plan === "business"
-              ? "Ti portiamo al pagamento sicuro…"
-              : "Accesso alla dashboard in corso…"}
+              ? "Taking you to secure checkout…"
+              : "Signing in to your dashboard…"}
           </div>
         </Card>
       </div>
     );
   }
 
-  const stepLabels = ["Dati", "Verifica email"];
+  const stepLabels = ["Details", "Verify email"];
   const stepIndex = step === "dati" ? 0 : 1;
 
   return (
@@ -283,8 +283,8 @@ export default function Register() {
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <User className="h-6 w-6 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold">Crea il tuo account</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Compila i tuoi dati — poi verificheremo la tua email</p>
+              <h1 className="text-2xl font-bold">Create your account</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Fill in your details — then we'll verify your email</p>
             </>
           )}
           {step === "verifica" && (
@@ -292,9 +292,9 @@ export default function Register() {
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <Shield className="h-6 w-6 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold">Verifica email</h1>
+              <h1 className="text-2xl font-bold">Verify email</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Codice inviato a <strong className="text-foreground">{form.email}</strong>
+                Code sent to <strong className="text-foreground">{form.email}</strong>
               </p>
             </>
           )}
@@ -311,12 +311,12 @@ export default function Register() {
             <form onSubmit={handleSendCode} className="space-y-4">
               {/* Piano */}
               <div>
-                <p className="mb-2 text-sm font-medium">Scegli il piano</p>
+                <p className="mb-2 text-sm font-medium">Choose your plan</p>
                 <div className="grid grid-cols-2 gap-2">
                   {plans.map((p) => (
                     <button key={p.id} type="button" onClick={() => setForm(f => ({ ...f, plan: p.id }))}
                       className={`relative rounded-lg border p-3 text-left transition-colors ${form.plan === p.id ? "border-primary bg-primary/10" : "border-border bg-muted/30 hover:border-primary/50"}`}>
-                      {p.popular && <Badge className="absolute -top-2 right-1 text-[9px] px-1.5 py-0">Popolare</Badge>}
+                      {p.popular && <Badge className="absolute -top-2 right-1 text-[9px] px-1.5 py-0">Popular</Badge>}
                       {(p as any).highlight && <Badge variant="secondary" className="absolute -top-2 left-1 text-[9px] px-1.5 py-0">{(p as any).highlight}</Badge>}
                       <p className="text-xs font-semibold">{p.label}</p>
                       <p className="mt-0.5 text-[11px] font-medium text-primary">{p.price}</p>
@@ -329,73 +329,73 @@ export default function Register() {
               {/* Nome e Cognome */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="firstName" className="text-xs">Nome *</Label>
+                  <Label htmlFor="firstName" className="text-xs">First name *</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="firstName" placeholder="Mario" className="pl-10"
+                    <Input id="firstName" placeholder="John" className="pl-10"
                       value={form.firstName} onChange={setField("firstName")} required autoFocus />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="lastName" className="text-xs">Cognome *</Label>
-                  <Input id="lastName" placeholder="Rossi"
+                  <Label htmlFor="lastName" className="text-xs">Last name *</Label>
+                  <Input id="lastName" placeholder="Smith"
                     value={form.lastName} onChange={setField("lastName")} required />
                 </div>
               </div>
 
-              {/* P.IVA / Codice Fiscale */}
+              {/* VAT / Tax ID */}
               <div className="space-y-1.5">
-                <Label htmlFor="vatCode" className="text-xs">P.IVA o Codice Fiscale</Label>
+                <Label htmlFor="vatCode" className="text-xs">VAT or Tax ID</Label>
                 <div className="relative">
                   <CreditCard className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="vatCode" placeholder="IT12345678901 oppure RSSMRA80A01H501U"
+                  <Input id="vatCode" placeholder="VAT123456789 or TAX1234567890"
                     className="pl-10" value={form.vatCode} onChange={setField("vatCode")} />
                 </div>
               </div>
 
-              {/* Azienda */}
+              {/* Company */}
               <div className="space-y-1.5">
-                <Label htmlFor="company" className="text-xs">Azienda (opzionale)</Label>
+                <Label htmlFor="company" className="text-xs">Company (optional)</Label>
                 <div className="relative">
                   <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="company" placeholder="Acme S.r.l." className="pl-10"
+                  <Input id="company" placeholder="Acme Inc." className="pl-10"
                     value={form.company} onChange={setField("company")} />
                 </div>
               </div>
 
-              {/* Via */}
+              {/* Street */}
               <div className="space-y-1.5">
-                <Label htmlFor="address" className="text-xs">Via e numero civico *</Label>
+                <Label htmlFor="address" className="text-xs">Street and number *</Label>
                 <div className="relative">
                   <Home className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="address" placeholder="Via Roma 1" className="pl-10"
+                  <Input id="address" placeholder="1 Main Street" className="pl-10"
                     value={form.address} onChange={setField("address")} required />
                 </div>
               </div>
 
-              {/* CAP e Città */}
+              {/* ZIP and City */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="postalCode" className="text-xs">CAP *</Label>
-                  <Input id="postalCode" placeholder="20100"
+                  <Label htmlFor="postalCode" className="text-xs">ZIP code *</Label>
+                  <Input id="postalCode" placeholder="10001"
                     value={form.postalCode} onChange={setField("postalCode")} required maxLength={10} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="city" className="text-xs">Città *</Label>
+                  <Label htmlFor="city" className="text-xs">City *</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="city" placeholder="Milano" className="pl-10"
+                    <Input id="city" placeholder="New York" className="pl-10"
                       value={form.city} onChange={setField("city")} required />
                   </div>
                 </div>
               </div>
 
-              {/* Telefono */}
+              {/* Phone */}
               <div className="space-y-1.5">
-                <Label htmlFor="phone" className="text-xs">Numero di cellulare *</Label>
+                <Label htmlFor="phone" className="text-xs">Mobile number *</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="phone" type="tel" placeholder="+39 333 1234567" className="pl-10"
+                  <Input id="phone" type="tel" placeholder="+1 555 123 4567" className="pl-10"
                     value={form.phone} onChange={setField("phone")} required />
                 </div>
               </div>
@@ -405,11 +405,11 @@ export default function Register() {
                 <Label htmlFor="email" className="text-xs">Email *</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="mario@azienda.com" className="pl-10"
+                  <Input id="email" type="email" placeholder="john@company.com" className="pl-10"
                     value={form.email} onChange={setField("email")} required />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  🔒 Ti invieremo un codice di verifica a questa email
+                  🔒 We'll send a verification code to this email
                 </p>
               </div>
 
@@ -419,7 +419,7 @@ export default function Register() {
                   <Label htmlFor="password" className="text-xs">Password *</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="password" type={showPw ? "text" : "password"} placeholder="Min 8 caratteri" className="pl-10 pr-10"
+                    <Input id="password" type={showPw ? "text" : "password"} placeholder="Min 8 characters" className="pl-10 pr-10"
                       value={form.password} onChange={setField("password")} required minLength={8} autoComplete="new-password" />
                     <button type="button" onClick={() => setShowPw(v => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -428,10 +428,10 @@ export default function Register() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="confirmPassword" className="text-xs">Conferma password *</Label>
+                  <Label htmlFor="confirmPassword" className="text-xs">Confirm password *</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input id="confirmPassword" type={showPw ? "text" : "password"} placeholder="Ripeti la password" className="pl-10"
+                    <Input id="confirmPassword" type={showPw ? "text" : "password"} placeholder="Repeat the password" className="pl-10"
                       value={form.confirmPassword} onChange={setField("confirmPassword")} required minLength={8} autoComplete="new-password" />
                   </div>
                 </div>
@@ -439,7 +439,7 @@ export default function Register() {
 
               <Button type="submit" className="w-full" size="lg"
                 disabled={loading || !form.firstName || !form.lastName || !form.email || !form.address || !form.postalCode || !form.city || !form.phone || form.password.length < 8}>
-                {loading ? "Invio codice…" : "Continua — Verifica email →"}
+                {loading ? "Sending code…" : "Continue — Verify email →"}
               </Button>
             </form>
           )}
@@ -447,7 +447,7 @@ export default function Register() {
           {step === "verifica" && (
             <div className="space-y-6">
               <div>
-                <Label className="mb-3 block text-center text-sm">Inserisci il codice a 6 cifre</Label>
+                <Label className="mb-3 block text-center text-sm">Enter the 6-digit code</Label>
                 <div className="flex justify-center gap-2" onPaste={handlePaste}>
                   {code.map((digit, i) => (
                     <input key={i} ref={(el) => { codeRefs.current[i] = el; }}
@@ -463,28 +463,28 @@ export default function Register() {
               </div>
               <Button className="w-full" size="lg"
                 disabled={loading || code.join("").length !== 6} onClick={() => handleVerifyCode()}>
-                {loading ? "Creazione account…" : "Verifica e crea account →"}
+                {loading ? "Creating account…" : "Verify and create account →"}
               </Button>
               <div className="flex items-center justify-between text-sm">
                 <button type="button" className="text-muted-foreground hover:text-foreground flex items-center gap-1.5"
                   onClick={() => { setStep("dati"); setCode(["","","","","",""]); setError(null); }}>
-                  <RotateCcw className="h-3.5 w-3.5" /> Modifica dati
+                  <RotateCcw className="h-3.5 w-3.5" /> Edit details
                 </button>
                 <button type="button"
                   className={`flex items-center gap-1.5 ${resendCooldown > 0 ? "text-muted-foreground cursor-not-allowed" : "text-primary hover:text-primary/80"}`}
                   disabled={resendCooldown > 0 || loading}
                   onClick={() => { setCode(["","","","","",""]); setError(null); handleSendCode(); }}>
                   <RotateCcw className="h-3.5 w-3.5" />
-                  {resendCooldown > 0 ? `Reinvia (${resendCooldown}s)` : "Reinvia codice"}
+                  {resendCooldown > 0 ? `Resend (${resendCooldown}s)` : "Resend code"}
                 </button>
               </div>
-              <p className="text-center text-xs text-muted-foreground">⏱ Valido 10 min · 🔒 Usa e getta</p>
+              <p className="text-center text-xs text-muted-foreground">⏱ Valid for 10 min · 🔒 One-time use</p>
             </div>
           )}
 
           <p className="mt-5 text-center text-sm text-muted-foreground">
-            Hai già un account?{" "}
-            <Link href="/login" className="text-primary hover:underline font-medium">Accedi</Link>
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline font-medium">Sign in</Link>
           </p>
         </CardContent>
       </Card>

@@ -75,6 +75,10 @@ function makeRequireUser(paramName?: string, forceStrict = false) {
         res.status(401).json({ error: "Invalid or expired session" });
         return;
       }
+      if (claims.source === "staff_pending") {
+        res.status(403).json({ error: "Password change required" });
+        return;
+      }
       const supplied = suppliedIds(req, paramName);
       if (supplied.some((id) => id !== claims.userId)) {
         res.status(403).json({ error: "Forbidden" });
@@ -129,6 +133,10 @@ export async function requireSelf(
     const claims = verifySessionToken(token);
     if (!claims) {
       res.status(401).json({ error: "Invalid or expired session" });
+      return;
+    }
+    if (claims.source === "staff_pending") {
+      res.status(403).json({ error: "Password change required" });
       return;
     }
     if (!Number.isNaN(paramId) && claims.userId !== paramId) {

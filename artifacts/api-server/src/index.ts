@@ -4,6 +4,7 @@ import { pool } from "@workspace/db";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./lib/stripeClient";
 import { startAgentCron } from "./lib/taskAgent";
+import { ensureStaffAdmin } from "./lib/staffAuth";
 
 const rawPort = process.env["PORT"];
 if (!rawPort) throw new Error("PORT environment variable is required but was not provided.");
@@ -63,6 +64,26 @@ async function runAppMigrations() {
       logger.info("task_reports + is_moderator migration OK");
     } catch (err) {
       logger.error({ err }, "task_reports/is_moderator migration FAILED — report basket & moderation unavailable");
+    } finally {
+      c.release();
+    }
+  }
+
+  // Staff (admin/supervisor) email+password auth columns. Isolated & idempotent
+  // — the Mini App settings staff login depends on these. Applied on every boot
+  // because we have no direct psql access to production (Neon).
+  {
+    const c = await pool.connect();
+    try {
+      await c.query(`
+        ALTER TABLE users
+          ADD COLUMN IF NOT EXISTS email                text,
+          ADD COLUMN IF NOT EXISTS password_hash        text,
+          ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+      `);
+      logger.info("staff auth columns migration OK");
+    } catch (err) {
+      logger.error({ err }, "staff auth columns migration FAILED — staff login unavailable");
     } finally {
       c.release();
     }
@@ -169,6 +190,7 @@ async function initStripe() {
 
 async function main() {
   await runAppMigrations();
+  await ensureStaffAdmin();
   await initStripe();
 
   app.listen(port, (err) => {

@@ -80,7 +80,11 @@ export function useBusinessAuth() {
   useEffect(() => { loadSession(); }, [loadSession]);
 
   useEffect(() => {
-    const sync = () => { setLoading(true); loadSession(); };
+    // Re-validate the session on cross-tab/login changes WITHOUT flipping to a
+    // global loading state. Setting loading(true) here briefly cleared `client`,
+    // which made the route guards bounce between /login and /dashboard in an
+    // endless reload loop right after entering the email code.
+    const sync = () => { loadSession(); };
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, [loadSession]);

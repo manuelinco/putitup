@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-export const ADSGRAM_BLOCK_ID = "int-36439";
+export const ADSGRAM_BLOCK_ID = "int-36557";
 
 /**
  * Result of attempting to show a real Adsgram ad:

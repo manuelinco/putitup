@@ -66,19 +66,19 @@ export default function Login() {
         if (data.code === "no_password") {
           setMode("code");
           setError(null);
-          setInfo("Questo account non ha una password. Ti inviamo un codice via email per accedere.");
+          setInfo("This account has no password. We'll send you a code via email to sign in.");
         } else {
-          setError(data.error ?? "Credenziali non valide");
+          setError(data.error ?? "Invalid credentials");
         }
         return;
       }
       if (!data.token || !data.client) {
-        setError("Risposta del server non valida — riprova");
+        setError("Invalid server response — please try again");
         return;
       }
       persistSession(data);
     } catch {
-      setError("Errore di connessione — riprova");
+      setError("Connection error — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +96,7 @@ export default function Login() {
 
   const handleSendCode = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!email.trim()) { setError("Inserisci la tua email"); return; }
+    if (!email.trim()) { setError("Enter your email"); return; }
     setError(null);
     setSubmitting(true);
     try {
@@ -106,9 +106,9 @@ export default function Login() {
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data.error ?? "Errore invio codice"); return; }
+      if (!res.ok) { setError(data.error ?? "Error sending code"); return; }
       setCodeSent(true);
-      setInfo(`Codice inviato a ${email.trim().toLowerCase()}`);
+      setInfo(`Code sent to ${email.trim().toLowerCase()}`);
       startCooldown();
       if (data.devCode && String(data.devCode).length === 6) {
         const digits = String(data.devCode).split("");
@@ -118,7 +118,7 @@ export default function Login() {
         setTimeout(() => codeRefs.current[0]?.focus(), 100);
       }
     } catch {
-      setError("Errore di connessione — riprova");
+      setError("Connection error — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -158,7 +158,7 @@ export default function Login() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Codice non valido");
+        setError(data.error ?? "Invalid code");
         setCode(["", "", "", "", "", ""]);
         setTimeout(() => codeRefs.current[0]?.focus(), 50);
         return;
@@ -166,12 +166,12 @@ export default function Login() {
       // Existing client → verify returns a session token + client. New accounts
       // can't log in via this page, so guide them to registration.
       if (!data.token || !data.client) {
-        setError("Nessun account trovato per questa email. Registrati prima di accedere.");
+        setError("No account found for this email. Please register before signing in.");
         return;
       }
       persistSession(data);
     } catch {
-      setError("Errore di connessione — riprova");
+      setError("Connection error — please try again");
     } finally {
       setSubmitting(false);
     }
@@ -213,11 +213,11 @@ export default function Login() {
 
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="pb-4 text-center">
-          <h1 className="text-2xl font-bold">Accedi</h1>
+          <h1 className="text-2xl font-bold">Sign In</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "password"
-              ? "Inserisci email e password per accedere al tuo account"
-              : "Ti inviamo un codice via email per accedere"}
+              ? "Enter your email and password to access your account"
+              : "We'll send you a code via email to sign in"}
           </p>
         </CardHeader>
         <CardContent>
@@ -239,7 +239,7 @@ export default function Login() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="tu@azienda.com"
+                  placeholder="you@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
@@ -264,7 +264,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPw((v) => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label={showPw ? "Nascondi password" : "Mostra password"}
+                    aria-label={showPw ? "Hide password" : "Show password"}
                   >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -272,7 +272,7 @@ export default function Login() {
               </div>
 
               <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? "Accesso in corso…" : "Accedi"}
+                {submitting ? "Signing in…" : "Sign In"}
               </Button>
 
               <button
@@ -280,7 +280,7 @@ export default function Login() {
                 onClick={switchToCode}
                 className="flex w-full items-center justify-center gap-1.5 text-sm text-primary hover:underline"
               >
-                <Mail className="h-3.5 w-3.5" /> Accedi con codice email
+                <Mail className="h-3.5 w-3.5" /> Sign in with email code
               </button>
             </form>
           )}
@@ -294,7 +294,7 @@ export default function Login() {
                   <Input
                     id="email-code"
                     type="email"
-                    placeholder="tu@azienda.com"
+                    placeholder="you@company.com"
                     className="pl-10"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -305,14 +305,14 @@ export default function Login() {
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={submitting || !email.trim()}>
-                {submitting ? "Invio codice…" : "Inviami il codice"}
+                {submitting ? "Sending code…" : "Send me the code"}
               </Button>
               <button
                 type="button"
                 onClick={switchToPassword}
                 className="flex w-full items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
               >
-                <ShieldCheck className="h-3.5 w-3.5" /> Accedi con password
+                <ShieldCheck className="h-3.5 w-3.5" /> Sign in with password
               </button>
             </form>
           )}
@@ -320,7 +320,7 @@ export default function Login() {
           {mode === "code" && codeSent && (
             <div className="space-y-6">
               <div>
-                <Label className="mb-3 block text-center text-sm">Inserisci il codice a 6 cifre</Label>
+                <Label className="mb-3 block text-center text-sm">Enter the 6-digit code</Label>
                 <div className="flex justify-center gap-2" onPaste={handlePaste}>
                   {code.map((digit, i) => (
                     <input
@@ -344,7 +344,7 @@ export default function Login() {
                 disabled={submitting || code.join("").length !== 6}
                 onClick={() => handleVerifyCode()}
               >
-                {submitting ? "Verifica in corso…" : "Verifica e accedi →"}
+                {submitting ? "Verifying…" : "Verify and sign in →"}
               </Button>
               <div className="flex items-center justify-between text-sm">
                 <button
@@ -352,7 +352,7 @@ export default function Login() {
                   className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
                   onClick={() => { setCodeSent(false); setCode(["", "", "", "", "", ""]); setError(null); }}
                 >
-                  <RotateCcw className="h-3.5 w-3.5" /> Cambia email
+                  <RotateCcw className="h-3.5 w-3.5" /> Change email
                 </button>
                 <button
                   type="button"
@@ -361,16 +361,16 @@ export default function Login() {
                   onClick={() => { setCode(["", "", "", "", "", ""]); setError(null); handleSendCode(); }}
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
-                  {resendCooldown > 0 ? `Reinvia (${resendCooldown}s)` : "Reinvia codice"}
+                  {resendCooldown > 0 ? `Resend (${resendCooldown}s)` : "Resend code"}
                 </button>
               </div>
             </div>
           )}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            Non hai un account?{" "}
+            Don't have an account?{" "}
             <Link href="/register" className="font-semibold text-primary hover:underline">
-              Registrati
+              Sign up
             </Link>
           </p>
         </CardContent>
