@@ -9,8 +9,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Timer, Target, Star, ChevronRight, Flame, Shield, Volume2, VolumeX } from "lucide-react";
+import { Zap, Timer, Target, Star, ChevronRight, Flame, Shield, Volume2, VolumeX, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { API_BASE } from "@/lib/api";
+import { getSessionToken } from "@/lib/session";
 
 const TASK_TIME_SECONDS = 30;
 
@@ -58,6 +60,8 @@ export default function Tasks() {
   const [showAdChallenge, setShowAdChallenge] = useState(false);
   const [adPending, setAdPending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const [reported, setReported] = useState(false);
   const BOT_PENALTY_KEY = "putitup_bot_penalty_until";
   const [botPenaltyUntil, setBotPenaltyUntil] = useState<number>(() => {
     try {
@@ -104,6 +108,8 @@ export default function Tasks() {
     setSubmitted(false);
     setResult(null);
     setSubmitError(null);
+    setReporting(false);
+    setReported(false);
     setTimeLeft(TASK_TIME_SECONDS);
     setTimerActive(true);
     setShake(false);
@@ -260,6 +266,36 @@ export default function Tasks() {
   const energyPct = (energy / maxEnergy) * 100;
   const timerPct = (timeLeft / TASK_TIME_SECONDS) * 100;
   const comboMultiplier = combo >= 5 ? 3 : combo >= 3 ? 2 : 1;
+
+  // Report a bad/wrong question, then skip to the next task.
+  const reportTask = async () => {
+    if (!task || reporting || reported || !userId) return;
+    setReporting(true);
+    try {
+      const token = getSessionToken();
+      const res = await fetch(`${API_BASE}/api/tasks/${task.id}/report`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          userId,
+          datasetId: (task as { datasetId?: number | null }).datasetId ?? null,
+          questionSnapshot: String(payload?.question ?? ""),
+          reason: "wrong_question",
+        }),
+      });
+      if (!res.ok) throw new Error("report failed");
+      setReported(true);
+      notification("success");
+      window.setTimeout(() => { refetchTask(); }, 800);
+    } catch {
+      notification("error");
+    } finally {
+      setReporting(false);
+    }
+  };
 
   return (
     <Layout>
@@ -591,9 +627,28 @@ export default function Tasks() {
               )}
 
               {/* Question */}
-              <p className="text-sm font-bold leading-snug">
-                {String(payload?.question ?? "Label this element:")}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-bold leading-snug flex-1">
+                  {String(payload?.question ?? "Label this element:")}
+                </p>
+                {!submitted && (
+                  <button
+                    type="button"
+                    onClick={reportTask}
+                    disabled={reporting || reported}
+                    className={cn(
+                      "flex-shrink-0 flex items-center gap-1 text-[10px] font-bold rounded-full px-2 py-1 border transition-colors disabled:opacity-60",
+                      reported
+                        ? "border-secondary/40 text-secondary bg-secondary/10"
+                        : "border-border/40 text-muted-foreground hover:text-destructive hover:border-destructive/40"
+                    )}
+                    title="Segnala domanda errata"
+                  >
+                    <Flag className="w-3 h-3" />
+                    {reported ? "Segnalata" : reporting ? "Invio…" : "Domanda errata"}
+                  </button>
+                )}
+              </div>
 
               {/* Text snippet for text tasks */}
               {task.type === "text" && !!(payload?.content ?? payload?.text) && (

@@ -21,7 +21,6 @@ import {
   CheckCircle,
   Eye,
   Wallet,
-  Trophy,
   Coins,
   BarChart2,
   ClipboardList,
@@ -29,6 +28,10 @@ import {
   ShieldAlert,
   Ban,
   ShieldCheck,
+  Search,
+  UserCog,
+  Send,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE } from "@/lib/api";
@@ -99,7 +102,7 @@ interface PendingPayment {
   } | null;
 }
 
-type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer" | "lottery" | "botwatch";
+type ActiveSection = "stats" | "tasks" | "datasets" | "payments" | "users" | "approve" | "minipimer" | "botwatch";
 
 interface BotWatchRow {
   userId: number;
@@ -112,6 +115,28 @@ interface BotWatchRow {
   adsWatchedToday: number;
   totalAdsWatched: number;
   blocked: boolean;
+}
+
+interface RoleUser {
+  id: number;
+  username: string;
+  telegramId: string | null;
+  points: number;
+  level: string;
+  isAdmin: boolean;
+  isSupervisor: boolean;
+  isModerator: boolean;
+}
+
+interface AntibotConfig {
+  config: {
+    dailyAdCap: number;
+    adCooldownSeconds: number;
+    minAdSeconds: number;
+    riskBlockThreshold: number;
+    flagThreshold: number;
+  };
+  stats: { tracked: number; blocked: number; flagged: number };
 }
 
 export default function Admin() {
@@ -132,21 +157,26 @@ export default function Admin() {
   const [minipimer, setMinipimer] = useState<{id: number; name: string; category: string; status: string; approvedTasks: number; totalTasks: number; readyToExport: boolean}[]>([]);
   const [minipimerLoading, setMinipimerLoading] = useState(false);
   const [minipimerExporting, setMinipimerExporting] = useState<number | null>(null);
+  const [minipimerPushing, setMinipimerPushing] = useState<number | null>(null);
+  const [minipimerPushResult, setMinipimerPushResult] = useState<Record<number, string>>({});
 
-  const [lotteryDatasets, setLotteryDatasets] = useState<{id: number; name: string; lotteryPool: number; lotteryWinners: number; lotteryDrawnAt: string | null; recordCount: number | null}[]>([]);
-  const [lotteryLoading, setLotteryLoading] = useState(false);
-  const [drawingLottery, setDrawingLottery] = useState<number | null>(null);
-  const [lotteryResults, setLotteryResults] = useState<Record<number, {winners: {userId: number; username: string; amountTon: number}[]; prizePoolTon: number} | null>>({});
+  const [roleUsers, setRoleUsers] = useState<RoleUser[]>([]);
+  const [roleSearch, setRoleSearch] = useState("");
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleBusy, setRoleBusy] = useState<number | null>(null);
 
   const [botWatch, setBotWatch] = useState<BotWatchRow[]>([]);
   const [botWatchLoading, setBotWatchLoading] = useState(false);
   const [botWatchBusy, setBotWatchBusy] = useState<number | null>(null);
+  const [antibotConfig, setAntibotConfig] = useState<AntibotConfig | null>(null);
 
   const [batchTasks, setBatchTasks] = useState<TaskEntry[]>([emptyTask()]);
   const [currentTask, setCurrentTask] = useState<TaskEntry>(emptyTask());
   const [batchDatasetId, setBatchDatasetId] = useState("");
   const [batchSaving, setBatchSaving] = useState(false);
   const [batchSaved, setBatchSaved] = useState(false);
+  const [batchSavedCount, setBatchSavedCount] = useState<number | null>(null);
+  const [batchError, setBatchError] = useState<string | null>(null);
 
   const [datasetForm, setDatasetForm] = useState({
     name: "",
@@ -159,11 +189,10 @@ export default function Admin() {
     tokenCost: 0,
     adsRequired: 3,
     price: 0,
-    lotteryPool: 0,
-    lotteryWinners: 0,
     completionTarget: 100,
   });
   const [datasetSaved, setDatasetSaved] = useState(false);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch("/api/admin/stats")
@@ -198,6 +227,10 @@ export default function Admin() {
     try {
       const data = await apiFetch("/api/admin/bot-watch");
       setBotWatch(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+    try {
+      const cfg = await apiFetch("/api/admin/antibot-config");
+      setAntibotConfig(cfg ?? null);
     } catch { /* ignore */ }
     setBotWatchLoading(false);
   };
@@ -243,8 +276,10 @@ export default function Admin() {
   const handleSaveBatch = async () => {
     if (batchTasks.length === 0) return;
     setBatchSaving(true);
+    setBatchError(null);
+    setBatchSaved(false);
     try {
-      await apiFetch("/api/admin/tasks/batch", {
+      const result = await apiFetch("/api/admin/tasks/batch", {
         method: "POST",
         body: JSON.stringify({
           datasetId: batchDatasetId ? Number(batchDatasetId) : null,
@@ -263,9 +298,12 @@ export default function Admin() {
         }),
       });
       setBatchSaved(true);
+      setBatchSavedCount(result?.created ?? batchTasks.length);
       setBatchTasks([emptyTask()]);
-      setTimeout(() => setBatchSaved(false), 3000);
-    } catch { /* ignore */ }
+      setTimeout(() => setBatchSaved(false), 5000);
+    } catch (e: any) {
+      setBatchError(e?.message ?? "Errore durante il salvataggio dei task");
+    }
     setBatchSaving(false);
   };
 
@@ -284,8 +322,6 @@ export default function Admin() {
           tokenCost: datasetForm.tokenCost,
           adsRequired: datasetForm.adsRequired,
           price: datasetForm.price || null,
-          lotteryPool: datasetForm.lotteryPool,
-          lotteryWinners: datasetForm.lotteryWinners,
           completionTarget: datasetForm.completionTarget,
           importMode: "manual",
           requestedTaskCount: datasetForm.completionTarget,
@@ -293,14 +329,17 @@ export default function Admin() {
         }),
       });
       setDatasetSaved(true);
+      setDatasetError(null);
       setDatasetForm({
         name: "", description: "", category: "", accessType: "ads",
         workflowMode: "supervisor_admin", votesRequired: 5, consensusThreshold: 0.99,
-        tokenCost: 0, adsRequired: 3, price: 0, lotteryPool: 0, lotteryWinners: 0, completionTarget: 100,
+        tokenCost: 0, adsRequired: 3, price: 0, completionTarget: 100,
       });
-      setTimeout(() => setDatasetSaved(false), 3000);
+      setTimeout(() => setDatasetSaved(false), 4000);
       apiFetch("/api/admin/stats").then(setAdminStats).catch(() => {});
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      setDatasetError(e?.message ?? "Errore durante la creazione del dataset");
+    }
   };
 
   const handleApproveDataset = async (id: number) => {
@@ -309,42 +348,37 @@ export default function Admin() {
         method: "POST",
         body: JSON.stringify({ adminId: 1 }),
       });
-      setApprovalResult(`Dataset #${id} published. Lottery: ${result.lotteryResult ? `${result.lotteryResult.winnersCount} winners` : "none"}. Payments: ${result.pendingPaymentsCreated}`);
+      setApprovalResult(`Dataset #${id} pubblicato. Pagamenti creati: ${result.pendingPaymentsCreated}`);
     } catch (e: any) {
-      setApprovalResult(`Error: ${e.message}`);
+      setApprovalResult(`Errore: ${e.message}`);
     }
   };
 
+  const loadRoleUsers = async (search: string) => {
+    setRoleLoading(true);
+    try {
+      const data = await apiFetch(`/api/admin/users${search ? `?search=${encodeURIComponent(search)}` : ""}`);
+      setRoleUsers(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+    setRoleLoading(false);
+  };
+
   useEffect(() => {
-    if (activeSection !== "lottery") return;
-    setLotteryLoading(true);
-    apiFetch("/api/datasets?limit=100")
-      .then((data: any) => {
-        const list = Array.isArray(data) ? data : [];
-        setLotteryDatasets(list.filter((d: any) => d.lotteryPool > 0));
-      })
-      .catch(() => {})
-      .finally(() => setLotteryLoading(false));
+    if (activeSection === "users") loadRoleUsers("");
   }, [activeSection]);
 
-  const handleDrawLottery = async (datasetId: number) => {
-    setDrawingLottery(datasetId);
+  const handleSetRole = async (userId: number, role: "supervisor" | "moderator" | "none", value: boolean) => {
+    setRoleBusy(userId);
     try {
-      const result = await apiFetch(`/api/datasets/${datasetId}/lottery/draw`, {
+      await apiFetch(`/api/admin/users/${userId}/role`, {
         method: "POST",
-        body: JSON.stringify({ adminId: 1 }),
+        body: JSON.stringify({ role, value }),
       });
-      setLotteryResults((prev) => ({ ...prev, [datasetId]: result }));
-      apiFetch("/api/datasets?limit=100")
-        .then((data: any) => {
-          const list = Array.isArray(data) ? data : [];
-          setLotteryDatasets(list.filter((d: any) => d.lotteryPool > 0));
-        }).catch(() => {});
+      await loadRoleUsers(roleSearch);
     } catch (e: any) {
-      alert(`Errore estrazione: ${e.message}`);
-    } finally {
-      setDrawingLottery(null);
+      alert(`Errore aggiornamento ruolo: ${e?.message ?? "sconosciuto"}`);
     }
+    setRoleBusy(null);
   };
 
   useEffect(() => {
@@ -382,6 +416,26 @@ export default function Admin() {
     }
   };
 
+  const handleMinipimerPush = async (dsId: number) => {
+    setMinipimerPushing(dsId);
+    try {
+      const result = await apiFetch(`/api/datasets/${dsId}/minipimer/push`, {
+        method: "POST",
+      });
+      setMinipimerPushResult((prev) => ({
+        ...prev,
+        [dsId]: `Pubblicati ${result.approvedTasks?.toLocaleString?.() ?? result.approvedTasks} record · catalogo Business: ${result.recordCount?.toLocaleString?.() ?? result.recordCount}`,
+      }));
+      apiFetch("/api/datasets/minipimer/summary")
+        .then((data: any) => setMinipimer(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    } catch (e: any) {
+      setMinipimerPushResult((prev) => ({ ...prev, [dsId]: `Errore: ${e?.message ?? "push fallito"}` }));
+    } finally {
+      setMinipimerPushing(null);
+    }
+  };
+
   const navItems: { id: ActiveSection; label: string; icon: React.ElementType }[] = [
     { id: "stats", label: "Stats", icon: BarChart2 },
     { id: "tasks", label: "Tasks", icon: ClipboardList },
@@ -389,7 +443,6 @@ export default function Admin() {
     { id: "payments", label: "Pagamenti", icon: Wallet },
     { id: "approve", label: "Approva", icon: CheckCircle },
     { id: "users", label: "Utenti", icon: Users },
-    { id: "lottery", label: "Lottery", icon: Trophy },
     { id: "minipimer", label: "Minipimer", icon: Download },
     { id: "botwatch", label: "Bot Watch", icon: ShieldAlert },
   ];
@@ -460,7 +513,12 @@ export default function Admin() {
           <div className="space-y-3">
             {batchSaved && (
               <div className="bg-secondary/20 border border-secondary/40 rounded-lg p-2 text-center text-xs text-secondary font-bold flex items-center justify-center gap-2">
-                <CheckCircle className="w-4 h-4" /> Batch saved successfully!
+                <CheckCircle className="w-4 h-4" /> {batchSavedCount ?? 0} task creati con successo!
+              </div>
+            )}
+            {batchError && (
+              <div className="bg-destructive/15 border border-destructive/40 rounded-lg p-2 text-center text-xs text-destructive font-bold flex items-center justify-center gap-2">
+                <AlertCircle className="w-4 h-4" /> {batchError}
               </div>
             )}
 
@@ -737,40 +795,6 @@ export default function Admin() {
                 </div>
               </div>
 
-              {/* Lottery section */}
-              <div className="border border-yellow-400/30 rounded-lg p-3 bg-yellow-400/5 space-y-2">
-                <p className="text-[10px] uppercase font-bold text-yellow-400 flex items-center gap-1.5">
-                  <Trophy className="w-3.5 h-3.5" />
-                  Lottery (optional)
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="text-[9px] text-muted-foreground mb-1">Prize pool (TON)</p>
-                    <input
-                      type="number"
-                      step="0.001"
-                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
-                      value={datasetForm.lotteryPool}
-                      onChange={(e) => setDatasetForm({ ...datasetForm, lotteryPool: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[9px] text-muted-foreground mb-1">Winners</p>
-                    <input
-                      type="number"
-                      className="w-full p-2 rounded-lg bg-muted/40 border border-border/50 text-xs"
-                      value={datasetForm.lotteryWinners}
-                      onChange={(e) => setDatasetForm({ ...datasetForm, lotteryWinners: Number(e.target.value) })}
-                    />
-                  </div>
-                </div>
-                {datasetForm.lotteryPool > 0 && datasetForm.lotteryWinners > 0 && (
-                  <p className="text-[10px] text-yellow-400/70">
-                    {datasetForm.lotteryWinners} winner{datasetForm.lotteryWinners > 1 ? "s" : ""} will each receive ~{(datasetForm.lotteryPool / datasetForm.lotteryWinners).toFixed(4)} TON when dataset is approved.
-                  </p>
-                )}
-              </div>
-
               <Button
                 className="w-full text-xs font-bold"
                 onClick={handleCreateDataset}
@@ -997,76 +1021,6 @@ export default function Admin() {
                     <div className="text-xs text-muted-foreground text-center py-8">Nessun dataset trovato</div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* ─── LOTTERY ───────────────────────────────── */}
-        {activeSection === "lottery" && (
-          <div className="space-y-3">
-            <Card className="border-yellow-500/30 bg-yellow-500/5">
-              <CardHeader className="p-3 pb-2 border-b border-border/30">
-                <CardTitle className="text-xs uppercase text-muted-foreground flex items-center gap-2">
-                  <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-                  Lottery Draw — Dataset Prize Pools
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 space-y-3">
-                {lotteryLoading && (
-                  <div className="text-xs text-muted-foreground text-center py-4">Caricamento…</div>
-                )}
-                {!lotteryLoading && lotteryDatasets.length === 0 && (
-                  <div className="text-xs text-muted-foreground text-center py-4">
-                    Nessun dataset con lottery pool configurato.
-                  </div>
-                )}
-                {lotteryDatasets.map((ds) => {
-                  const result = lotteryResults[ds.id];
-                  return (
-                    <div key={ds.id} className="rounded-lg border border-border/40 bg-card/60 p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-xs font-bold leading-tight">{ds.name}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Pool: <span className="text-yellow-400 font-bold">{ds.lotteryPool} TON</span>
-                            {" · "}{ds.lotteryWinners} winner{ds.lotteryWinners !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        {ds.lotteryDrawnAt ? (
-                          <Badge variant="outline" className="text-[9px] border-green-500/40 text-green-400 shrink-0">
-                            Estratta ✓
-                          </Badge>
-                        ) : (
-                          <Button
-                            size="sm"
-                            className="h-7 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 hover:bg-yellow-500/30 shrink-0"
-                            disabled={drawingLottery === ds.id}
-                            onClick={() => handleDrawLottery(ds.id)}
-                          >
-                            {drawingLottery === ds.id ? "Estrazione…" : "🎰 Estrai"}
-                          </Button>
-                        )}
-                      </div>
-                      {ds.lotteryDrawnAt && !result && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Estratta il {new Date(ds.lotteryDrawnAt).toLocaleDateString("it-IT")}
-                        </p>
-                      )}
-                      {result && (
-                        <div className="rounded-md bg-yellow-500/10 border border-yellow-500/20 p-2 space-y-1">
-                          <p className="text-[10px] font-bold text-yellow-400">🏆 Vincitori estratti!</p>
-                          {result.winners.map((w) => (
-                            <div key={w.userId} className="flex items-center justify-between text-[10px]">
-                              <span className="font-mono text-foreground">@{w.username}</span>
-                              <span className="text-yellow-400 font-bold">{w.amountTon.toFixed(4)} TON</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
               </CardContent>
             </Card>
           </div>

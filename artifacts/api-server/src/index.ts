@@ -36,6 +36,38 @@ async function runAppMigrations() {
     }
   }
 
+  // Wrong-question reports + moderator role. Isolated & idempotent — the Mini App
+  // report basket and chat moderation depend on these. Applied on every boot
+  // because we have no direct psql access to production (Neon).
+  {
+    const c = await pool.connect();
+    try {
+      await c.query(`
+        ALTER TABLE users
+          ADD COLUMN IF NOT EXISTS is_moderator boolean NOT NULL DEFAULT false;
+        CREATE TABLE IF NOT EXISTS task_reports (
+          id                  serial PRIMARY KEY,
+          task_id             integer NOT NULL,
+          dataset_id          integer,
+          reporter_user_id    integer REFERENCES users(id) ON DELETE SET NULL,
+          reason              text NOT NULL DEFAULT 'wrong_question',
+          note                text,
+          question_snapshot   text,
+          status              text NOT NULL DEFAULT 'pending',
+          reviewed_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+          reviewed_at         timestamptz,
+          created_at          timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS task_reports_status_idx ON task_reports (status);
+      `);
+      logger.info("task_reports + is_moderator migration OK");
+    } catch (err) {
+      logger.error({ err }, "task_reports/is_moderator migration FAILED — report basket & moderation unavailable");
+    } finally {
+      c.release();
+    }
+  }
+
   // Legacy idempotent schema (enum values + columns). Non-fatal.
   {
     const client = await pool.connect();

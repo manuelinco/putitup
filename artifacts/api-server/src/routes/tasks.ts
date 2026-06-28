@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, and, notInArray, desc, gte, lt, sql } from "drizzle-orm";
-import { db, tasksTable, taskResponsesTable, rewardLedgerTable, usersTable } from "@workspace/db";
+import { db, tasksTable, taskResponsesTable, rewardLedgerTable, usersTable, taskReportsTable } from "@workspace/db";
 import { sendTonPayout } from "../lib/ton-payout";
+import { requireUser } from "../middleware/requireUser";
 import {
   ListTasksQueryParams,
   CreateTaskBody,
@@ -91,6 +92,228 @@ const AUDIO_TRANSCRIPTION_OPTIONS = [
 const SENTIMENT_OPTIONS = ["positive", "negative", "neutral"];
 const BINARY_OPTIONS = ["Yes", "No"];
 
+// ── Question variety ──────────────────────────────────────────────────────────
+// Bug fix: tasks within a dataset used to repeat the SAME question while only the
+// image/text changed. We diversify the QUESTION/PROMPT deterministically from the
+// task seed (slot for virtual tasks, id for real ones) so consecutive tasks cycle
+// through genuinely different phrasings/subtypes WITHOUT changing the meaning or
+// the answer options (consensus stays intact). All phrasings are English-only to
+// satisfy the englishOnly serving filter.
+const QUESTION_VARIANTS: Record<number, string[]> = {
+  10: [
+    "What is the overall sentiment of this customer review?",
+    "How would you classify the emotion expressed in this text?",
+    "Rate the general sentiment of the following message:",
+    "Does this review lean positive, negative, or neutral?",
+    "What feeling best matches the tone of this comment?",
+    "How does the author of this text seem to feel?",
+    "Judge the sentiment conveyed by these words:",
+    "Overall, is the writer happy, unhappy, or neutral here?",
+  ],
+  11: [
+    "What is the customer's primary intent in this message?",
+    "Classify the intent behind this support request:",
+    "What action does the customer want to take?",
+    "What is this customer mainly trying to do?",
+    "Identify the goal of the customer in this message:",
+    "Which category best captures this customer's request?",
+    "What outcome is the customer looking for?",
+    "Based on the text, what does the customer intend?",
+  ],
+  12: [
+    "What is the primary subject in this image?",
+    "Identify the main category of this photograph:",
+    "What category best describes what you see in this image?",
+    "Which single category fits the MAIN subject of this photo?",
+    "Ignore the background — what is the dominant subject here?",
+    "What is the most prominent thing shown in this image?",
+    "Choose the category that best matches the focal subject:",
+    "What does this picture mainly show?",
+  ],
+  13: [
+    "What type of named entity is highlighted in this text?",
+    "Classify the key entity mentioned in this sentence:",
+    "What category does the main term in this text belong to?",
+    "Which entity type best fits the highlighted name?",
+    "Identify the type of the most important entity here:",
+    "What kind of entity is referenced in this passage?",
+    "Label the main proper noun in this sentence:",
+    "Which named-entity category applies to this text?",
+  ],
+  14: [
+    "Which AI response better answers the question?",
+    "Compare these two responses and select the better one:",
+    "Which answer is more helpful and accurate?",
+    "Between Response A and Response B, which is stronger?",
+    "Which reply best addresses the user's question?",
+    "Pick the response that is more correct and useful:",
+    "Which of the two answers would you prefer?",
+    "Judge which response is of higher quality:",
+  ],
+  15: [
+    "How accurate is this machine translation?",
+    "Rate the quality of this translated text:",
+    "Does this translation preserve the original meaning?",
+    "How faithful is the translation to the source text?",
+    "Assess how well this translation conveys the original:",
+    "What is the quality level of this translation?",
+    "Judge whether this translation is correct:",
+    "How many errors does this translation contain?",
+  ],
+  16: [
+    "Which medical specialty is most relevant for this case?",
+    "Classify the medical department for this patient note:",
+    "What specialty should review this medical record?",
+    "To which medical field does this case best belong?",
+    "Which department should handle this patient?",
+    "Identify the most appropriate medical specialty here:",
+    "What kind of specialist is needed for this case?",
+    "Route this clinical note to the correct specialty:",
+  ],
+  17: [
+    "What type of customer support ticket is this?",
+    "Classify this support request:",
+    "How should this customer message be routed?",
+    "Which support category fits this message best?",
+    "What kind of ticket should this be filed as?",
+    "Identify the nature of this support request:",
+    "How would you tag this customer message?",
+    "What is the main type of this support contact?",
+  ],
+  18: [
+    "Is this text sarcastic or sincere?",
+    "Detect the tone of this online comment:",
+    "How would you classify the writing style of this post?",
+    "Does this message sound genuine or sarcastic?",
+    "What is the underlying tone of these words?",
+    "Judge whether the author means this literally:",
+    "Is there sarcasm in this statement?",
+    "Classify the intent behind the tone of this text:",
+  ],
+  19: [
+    "Rate the overall quality of this image:",
+    "How would you assess the visual quality?",
+    "What is the quality tier of this photograph?",
+    "How good is the overall quality of this picture?",
+    "Grade the visual quality you see here:",
+    "What quality level best describes this image?",
+    "Judge the overall production quality of this photo:",
+    "How would you rank the quality of this image?",
+  ],
+  20: [
+    "What is the main subject or scene shown in this image?",
+    "Which category best describes what you see in this photo?",
+    "How would you classify the content of this image?",
+    "What does this image primarily depict?",
+    "Choose the scene type that best matches this picture:",
+    "What is happening or shown in this image?",
+    "Which content category fits this photo best?",
+    "Identify the main scene captured here:",
+  ],
+  21: [
+    "If a person's face is visible, what expression do they show? If not, select 'No face visible'.",
+    "Identify the mood or expression visible in this image:",
+    "What is the dominant human emotion visible, if any?",
+    "What facial expression is shown, if a face is present?",
+    "Which emotion best matches the person's expression here?",
+    "If someone is pictured, how do they appear to feel?",
+    "What expression does the subject of this photo convey?",
+    "Read the emotion on the face in this image (or pick 'No person or face visible'):",
+  ],
+  22: [
+    "Rate the overall visual quality and clarity of this image:",
+    "How would you assess the technical quality of this photograph?",
+    "Is this image suitable for professional or commercial use?",
+    "Judge the sharpness, lighting and clarity of this photo:",
+    "What is the technical quality level of this image?",
+    "How usable is this image in terms of quality?",
+    "Assess whether this photo meets professional standards:",
+    "Grade the clarity and lighting of this picture:",
+  ],
+  23: [
+    "Is this English transcription accurate?",
+    "Rate the quality of this speech-to-text output:",
+    "Does this transcription correctly capture the spoken words?",
+    "How well does the transcript match the English audio?",
+    "Judge the accuracy of this English transcription:",
+    "Are the spoken words correctly written in this transcript?",
+    "How faithful is this transcription to the audio?",
+    "Assess whether this English transcript is correct:",
+  ],
+  24: [
+    "Is this Italian transcription accurate?",
+    "Rate the quality of this Italian speech-to-text:",
+    "How well does this transcription match the audio?",
+    "Does the transcript correctly capture the Italian speech?",
+    "Judge the accuracy of this Italian transcription:",
+    "Are the spoken Italian words written correctly here?",
+    "How faithful is this transcript to the Italian audio?",
+    "Assess whether this Italian transcription is correct:",
+  ],
+  25: [
+    "Is this French transcription accurate?",
+    "Rate the quality of this French speech-to-text output:",
+    "Does the transcription match the spoken French?",
+    "How well does the transcript capture the French audio?",
+    "Judge the accuracy of this French transcription:",
+    "Are the spoken French words written correctly here?",
+    "How faithful is this transcript to the French audio?",
+    "Assess whether this French transcription is correct:",
+  ],
+  26: [
+    "What language is spoken in this audio clip?",
+    "Identify the spoken language:",
+    "Which language does this speaker use?",
+    "In what language is this clip spoken?",
+    "Detect the language of this recording:",
+    "Which language can you hear in this audio?",
+    "Name the language used by the speaker:",
+    "What language is being spoken here?",
+  ],
+  27: [
+    "What emotion does the speaker express?",
+    "Classify the emotional tone of this voice:",
+    "What is the speaker's primary emotion?",
+    "How does the speaker seem to feel?",
+    "Which emotion best matches this voice?",
+    "Read the mood conveyed by the speaker:",
+    "What feeling does the speaker's tone convey?",
+    "Identify the dominant emotion in this audio:",
+  ],
+  28: [
+    "What action is performed in this video clip?",
+    "Classify the activity shown:",
+    "What is the person doing in this scene?",
+    "Which activity best describes this clip?",
+    "Identify the main action taking place here:",
+    "What is happening in this video?",
+    "Choose the action that matches this scene:",
+    "What activity is depicted in this clip?",
+  ],
+  29: [
+    "What type of environment or setting is shown in this image?",
+    "Classify the scene or location visible in this photo:",
+    "Which environment best describes what this image shows?",
+    "What kind of place is depicted in this picture?",
+    "Identify the setting captured in this image:",
+    "What environment does this photo represent?",
+    "Choose the location type that fits this scene:",
+    "Where does this image appear to be taken?",
+  ],
+};
+
+function diversifyQuestion(
+  datasetId: number | null | undefined,
+  seed: number,
+  fallback: string,
+): string {
+  if (!datasetId) return fallback;
+  const variants = QUESTION_VARIANTS[datasetId];
+  if (!variants || variants.length === 0) return fallback;
+  const idx = Math.abs(Math.trunc(seed)) % variants.length;
+  return variants[idx] ?? fallback;
+}
+
 function enrichTask(task: typeof tasksTable.$inferSelect) {
   const payload = (task.dataPayload ?? {}) as Record<string, unknown>;
 
@@ -124,7 +347,13 @@ function enrichTask(task: typeof tasksTable.$inferSelect) {
     }
   }
 
-  return { ...task, dataPayload: { ...payload, options } };
+  const question = diversifyQuestion(
+    task.datasetId,
+    task.id,
+    String(payload.question ?? ""),
+  );
+
+  return { ...task, dataPayload: { ...payload, options, question } };
 }
 
 router.get("/tasks/next", async (req, res): Promise<void> => {
@@ -213,6 +442,13 @@ router.get("/tasks/next", async (req, res): Promise<void> => {
     const slot = virtualDoneCount % VIRTUAL_SLOT_COUNT;
 
     const vtask = generateVirtualTask(datasetId, slot);
+    // Diversify the question deterministically from the slot so consecutive
+    // virtual tasks within a dataset show genuinely different prompts.
+    vtask.dataPayload.question = diversifyQuestion(
+      datasetId,
+      slot,
+      vtask.dataPayload.question,
+    );
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     res.set("Pragma", "no-cache");
     res.json(vtask);
@@ -455,6 +691,129 @@ router.post("/tasks/:id/relabel", async (req, res): Promise<void> => {
   await db.delete(taskResponsesTable).where(eq(taskResponsesTable.taskId, id));
 
   res.json({ task: updated, responsesDeleted: true });
+});
+
+// ── Wrong-question reports ────────────────────────────────────────────────────
+// A labeler can flag a bad/wrong question. Admins & supervisors review the basket.
+
+const INT4_MAX = 2_147_483_647;
+const VIRTUAL_ID_BASE = 10_000_000_000;
+
+// Fold synthetic virtual-task ids (>= 10e9) into the int4 range used by the
+// task_reports.task_id column. Virtual ids encode datasetId*10M + slot which is
+// well under int4 once the base offset is removed.
+function toReportTaskId(raw: number): number {
+  let id = Math.trunc(raw);
+  if (id >= VIRTUAL_ID_BASE) id = id - VIRTUAL_ID_BASE;
+  if (id > INT4_MAX) id = id % INT4_MAX;
+  if (id < 0) id = Math.abs(id) % INT4_MAX;
+  return id;
+}
+
+// User reports a wrong/bad question for a task.
+router.post("/tasks/:id/report", requireUser, async (req, res): Promise<void> => {
+  const rawId = Number(req.params.id);
+  if (!Number.isFinite(rawId)) {
+    res.status(400).json({ error: "Invalid task id" });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const reporterUserId = req.userId ?? Number(body.userId);
+  if (!Number.isFinite(reporterUserId) || reporterUserId <= 0) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
+  const taskId = toReportTaskId(rawId);
+  const datasetId = body.datasetId != null && Number.isFinite(Number(body.datasetId))
+    ? Number(body.datasetId)
+    : null;
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) || null : null;
+  const questionSnapshot = typeof body.questionSnapshot === "string"
+    ? body.questionSnapshot.trim().slice(0, 2000) || null
+    : null;
+  const reason = typeof body.reason === "string" && body.reason.trim()
+    ? body.reason.trim().slice(0, 64)
+    : "wrong_question";
+
+  try {
+    const [report] = await db.insert(taskReportsTable).values({
+      taskId,
+      datasetId,
+      reporterUserId,
+      reason,
+      note,
+      questionSnapshot,
+    }).returning();
+    res.status(201).json({ report });
+  } catch (err) {
+    req.log?.error({ err }, "tasks: failed to insert task report");
+    res.status(503).json({ error: "Could not submit report" });
+  }
+});
+
+// Admin/supervisor: list reports (default status=pending).
+router.get("/tasks/reports", async (req, res): Promise<void> => {
+  const reviewerId = Number(
+    req.query["userId"] ?? req.query["reviewerUserId"] ?? req.headers["x-user-id"],
+  );
+  if (!Number.isFinite(reviewerId) || reviewerId <= 0) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const [actor] = await db
+    .select({ isAdmin: usersTable.isAdmin, isSupervisor: usersTable.isSupervisor })
+    .from(usersTable).where(eq(usersTable.id, reviewerId)).limit(1);
+  if (!actor || (!actor.isAdmin && !actor.isSupervisor)) {
+    res.status(403).json({ error: "Forbidden: admin or supervisor only" });
+    return;
+  }
+
+  const status = String(req.query["status"] ?? "pending");
+  const reports = await db
+    .select()
+    .from(taskReportsTable)
+    .where(eq(taskReportsTable.status, status))
+    .orderBy(desc(taskReportsTable.createdAt))
+    .limit(200);
+  res.json({ reports });
+});
+
+// Admin/supervisor: resolve a report (approve / reject).
+router.patch("/tasks/reports/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid report id" });
+    return;
+  }
+  const { status, reviewerUserId } = (req.body ?? {}) as Record<string, unknown>;
+  if (status !== "approved" && status !== "rejected") {
+    res.status(400).json({ error: "status must be 'approved' or 'rejected'" });
+    return;
+  }
+  const reviewerId = Number(reviewerUserId);
+  if (!Number.isFinite(reviewerId) || reviewerId <= 0) {
+    res.status(400).json({ error: "reviewerUserId is required" });
+    return;
+  }
+  const [actor] = await db
+    .select({ isAdmin: usersTable.isAdmin, isSupervisor: usersTable.isSupervisor })
+    .from(usersTable).where(eq(usersTable.id, reviewerId)).limit(1);
+  if (!actor || (!actor.isAdmin && !actor.isSupervisor)) {
+    res.status(403).json({ error: "Forbidden: admin or supervisor only" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(taskReportsTable)
+    .set({ status, reviewedByUserId: reviewerId, reviewedAt: new Date() })
+    .where(eq(taskReportsTable.id, id))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+  res.json({ report: updated });
 });
 
 router.get("/tasks/:id", async (req, res): Promise<void> => {

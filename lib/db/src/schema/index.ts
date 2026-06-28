@@ -13,4 +13,5 @@ export * from "./contributorDatasets";
 export * from "./clientAuth";
 export * from "./chatMessages";
 export * from "./contactMessages";
+export * from "./taskReports";
 export * from "./usedInitData";

@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, clientsTable, datasetsTable, datasetAccessTable, clientSessionsTable } from "@workspace/db";
+import { eq, desc, count, sql } from "drizzle-orm";
+import { db, clientsTable, datasetsTable, datasetAccessTable, clientSessionsTable, contactMessagesTable } from "@workspace/db";
 import { pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from "crypto";
 import { verifyAdChallengeToken } from "../lib/adChallenge";
+import { requireAdmin } from "../middleware/requireAdmin";
 
 const SESSION_SECRET = (() => {
   const s = process.env["SESSION_SECRET"];
@@ -51,13 +52,28 @@ router.post("/clients/login", async (req, res): Promise<void> => {
     .from(clientsTable)
     .where(eq(clientsTable.email, String(email).trim().toLowerCase()));
 
-  if (!client || !client.passwordHash) {
-    res.status(401).json({ error: "Invalid credentials" });
+  if (!client) {
+    res.status(401).json({ error: "Email o password non corretti" });
+    return;
+  }
+
+  // Account exists but was created without a password (e.g. via the email-code
+  // flow). Tell the user exactly how to get in instead of a generic error.
+  if (!client.passwordHash) {
+    res.status(403).json({
+      error: "Questo account non ha una password. Accedi con il codice via email.",
+      code: "no_password",
+    });
+    return;
+  }
+
+  if (client.isBlocked) {
+    res.status(403).json({ error: "Account bloccato. Contatta il supporto." });
     return;
   }
 
   if (!verifyPassword(String(password), client.passwordHash)) {
-    res.status(401).json({ error: "Invalid credentials" });
+    res.status(401).json({ error: "Email o password non corretti" });
     return;
   }
 
@@ -152,6 +168,90 @@ router.post("/clients/register", async (req, res): Promise<void> => {
   }).returning();
   const { passwordHash: _ph, ...safeClient } = client;
   res.status(201).json({ client: safeClient });
+});
+
+// PUBLIC — real platform aggregates for the marketing landing page.
+// Registered BEFORE the `/clients/:id` route so "public-stats" is not treated
+// as a client id.
+router.get("/clients/public-stats", async (_req, res): Promise<void> => {
+  let validatedRecords = 0;
+  let totalDatasets = 0;
+  let totalClients = 0;
+
+  try {
+    const [r] = await db
+      .select({ n: sql<number>`coalesce(sum(${datasetsTable.recordCount}), 0)::int` })
+      .from(datasetsTable)
+      .where(eq(datasetsTable.status, "active"));
+    validatedRecords = Number(r?.n ?? 0);
+  } catch {}
+
+  try {
+    const [r] = await db
+      .select({ n: count() })
+      .from(datasetsTable)
+      .where(eq(datasetsTable.status, "active"));
+    totalDatasets = Number(r?.n ?? 0);
+  } catch {}
+
+  try {
+    const [r] = await db.select({ n: count() }).from(clientsTable);
+    totalClients = Number(r?.n ?? 0);
+  } catch {}
+
+  res.json({ validatedRecords, totalDatasets, totalClients });
+});
+
+// ADMIN — list business clients (most recent first).
+router.get("/clients/admin/list", requireAdmin, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: clientsTable.id,
+      firstName: clientsTable.firstName,
+      lastName: clientsTable.lastName,
+      email: clientsTable.email,
+      company: clientsTable.company,
+      plan: clientsTable.plan,
+      tokenBalance: clientsTable.tokenBalance,
+      isBlocked: clientsTable.isBlocked,
+      createdAt: clientsTable.createdAt,
+    })
+    .from(clientsTable)
+    .orderBy(desc(clientsTable.createdAt))
+    .limit(500);
+  res.json(rows);
+});
+
+// ADMIN — list contact-form submissions (most recent first).
+router.get("/clients/admin/contact-messages", requireAdmin, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(contactMessagesTable)
+    .orderBy(desc(contactMessagesTable.createdAt))
+    .limit(200);
+  res.json(rows);
+});
+
+// ADMIN — dataset access / sales ledger with client + dataset labels.
+router.get("/clients/admin/sales", requireAdmin, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: datasetAccessTable.id,
+      method: datasetAccessTable.method,
+      tokensSpent: datasetAccessTable.tokensSpent,
+      amountPaidCents: datasetAccessTable.amountPaidCents,
+      status: datasetAccessTable.status,
+      createdAt: datasetAccessTable.createdAt,
+      clientEmail: clientsTable.email,
+      clientCompany: clientsTable.company,
+      datasetName: datasetsTable.name,
+    })
+    .from(datasetAccessTable)
+    .leftJoin(clientsTable, eq(datasetAccessTable.clientId, clientsTable.id))
+    .leftJoin(datasetsTable, eq(datasetAccessTable.datasetId, datasetsTable.id))
+    .orderBy(desc(datasetAccessTable.createdAt))
+    .limit(200);
+  res.json(rows);
 });
 
 router.post("/clients", async (req, res): Promise<void> => {

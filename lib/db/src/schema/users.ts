@@ -28,6 +28,7 @@ export const usersTable = pgTable("users", {
   avatarUrl: text("avatar_url"),
   isAdmin: boolean("is_admin").notNull().default(false),
   isSupervisor: boolean("is_supervisor").notNull().default(false),
+  isModerator: boolean("is_moderator").notNull().default(false),
   firstName: text("first_name"),
   lastName: text("last_name"),
   phone: text("phone"),

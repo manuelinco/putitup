@@ -1,5 +1,6 @@
 const RESEND_API_KEY = process.env["RESEND_API_KEY"];
 const FROM = "PUTITUP Business <noreply@putitupbusiness.it>";
+const CONTACT_NOTIFY_TO = "piscitellimanuel5@gmail.com";
 
 /** Escape HTML per prevenire XSS in template email */
 function escHtml(s: string): string {
@@ -170,4 +171,71 @@ export async function sendOtpEmail(
   }
 
   return { sent: true };
+}
+
+export interface ContactNotification {
+  name: string;
+  email: string;
+  message: string;
+  source: string;
+}
+
+/**
+ * Best-effort notification to the PUTITUP inbox when a visitor submits the
+ * business contact form. Returns true if the provider accepted the message.
+ * Never throws — callers should treat email as a side-effect that must not
+ * block storing/acknowledging the contact request.
+ */
+export async function sendContactNotificationEmail(payload: ContactNotification): Promise<boolean> {
+  const safeName = escHtml(payload.name);
+  const safeEmail = escHtml(payload.email);
+  const safeSource = escHtml(payload.source);
+  const safeMessage = escHtml(payload.message).replace(/\n/g, "<br/>");
+
+  if (!RESEND_API_KEY) {
+    if (IS_DEV) {
+      console.log(`\n📧 CONTACT DEV MODE — to: ${CONTACT_NOTIFY_TO} | from: ${payload.email} (${payload.name}) | source: ${payload.source}\n${payload.message}\n`);
+    }
+    return false;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="it"><body style="margin:0;padding:24px;background:#f4f4f8;font-family:Arial,Helvetica,sans-serif;color:#1a1a2e;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e2ef;border-radius:12px;overflow:hidden;">
+    <tr><td style="background:#7c3aed;height:5px;font-size:0;line-height:0;">&nbsp;</td></tr>
+    <tr><td style="padding:28px 32px;">
+      <p style="margin:0 0 16px;font-size:18px;font-weight:800;">Nuovo messaggio dal form contatti</p>
+      <p style="margin:0 0 6px;font-size:14px;"><strong>Nome:</strong> ${safeName}</p>
+      <p style="margin:0 0 6px;font-size:14px;"><strong>Email:</strong> <a href="mailto:${safeEmail}" style="color:#7c3aed;text-decoration:none;">${safeEmail}</a></p>
+      <p style="margin:0 0 16px;font-size:14px;"><strong>Origine:</strong> ${safeSource}</p>
+      <div style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:0 8px 8px 0;padding:14px 18px;font-size:14px;line-height:1.6;">${safeMessage}</div>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: FROM,
+        to: [CONTACT_NOTIFY_TO],
+        reply_to: payload.email,
+        subject: `Nuovo contatto da ${payload.name} — PUTITUP`,
+        html,
+        text: `Nuovo messaggio dal form contatti\n\nNome: ${payload.name}\nEmail: ${payload.email}\nOrigine: ${payload.source}\n\n${payload.message}`,
+      }),
+    });
+    if (!res.ok) {
+      console.error(`Resend contact error ${res.status}: ${await res.text()}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Resend contact notification failed", err);
+    return false;
+  }
 }

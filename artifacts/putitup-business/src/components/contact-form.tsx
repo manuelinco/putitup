@@ -30,10 +30,10 @@ export function ContactForm({ onClose }: ContactFormProps) {
         body: JSON.stringify({ name, email, message, source: "putitup-business" }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(data.error ?? "Error sending message"); return; }
+      if (!res.ok) { setError(data.error ?? "Errore durante l'invio del messaggio"); return; }
       setSent(true);
     } catch {
-      setError("Connection error — please try again");
+      setError("Errore di connessione — riprova");
     } finally {
       setLoading(false);
     }
@@ -43,9 +43,9 @@ export function ContactForm({ onClose }: ContactFormProps) {
     return (
       <div className="flex flex-col items-center gap-4 py-10 text-center">
         <CheckCircle2 className="w-14 h-14 text-primary" />
-        <p className="font-bold text-lg">Message sent!</p>
-        <p className="text-sm text-muted-foreground">We'll get back to you within 24 hours.</p>
-        {onClose && <Button variant="outline" size="sm" onClick={onClose}>Close</Button>}
+        <p className="font-bold text-lg">Messaggio inviato!</p>
+        <p className="text-sm text-muted-foreground">Ti risponderemo entro 24 ore.</p>
+        {onClose && <Button variant="outline" size="sm" onClick={onClose}>Chiudi</Button>}
       </div>
     );
   }
@@ -53,7 +53,7 @@ export function ContactForm({ onClose }: ContactFormProps) {
   return (
     <Card className="bg-card border-border">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <h3 className="font-bold text-lg">Contact Us</h3>
+        <h3 className="font-bold text-lg">Contattaci</h3>
         {onClose && (
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground rounded-full p-1">
             <X className="w-4 h-4" />
@@ -65,20 +65,20 @@ export function ContactForm({ onClose }: ContactFormProps) {
           {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" required />
+              <Label>Nome</Label>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Il tuo nome" required />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required />
+              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@azienda.com" required />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Message</Label>
+            <Label>Messaggio</Label>
             <Textarea
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder="Tell us about your project, dataset needs, or any questions…"
+              placeholder="Raccontaci del tuo progetto, delle esigenze sui dataset o di qualsiasi domanda…"
               required
               rows={5}
               className="resize-none"
@@ -86,7 +86,7 @@ export function ContactForm({ onClose }: ContactFormProps) {
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
             <Send className="w-4 h-4 mr-2" />
-            {loading ? "Sending…" : "Send Message"}
+            {loading ? "Invio in corso…" : "Invia messaggio"}
           </Button>
         </form>
       </CardContent>

@@ -30,6 +30,12 @@ interface PlatformStats {
   avgAccuracy: number;
 }
 
+interface PublicStats {
+  validatedRecords: number;
+  totalDatasets: number;
+  totalClients: number;
+}
+
 function usePlatformStats() {
   const CACHE_KEY = "pb_stats_cache";
   const [stats, setStats] = useState<PlatformStats | null>(() => {
@@ -40,6 +46,25 @@ function usePlatformStats() {
     fetch(`${API_BASE}/api/stats`, { cache: "no-store" })
       .then(r => r.json())
       .then((d: PlatformStats) => {
+        setStats(d);
+        localStorage.setItem(CACHE_KEY, JSON.stringify(d));
+      })
+      .catch(() => {});
+  }, []);
+
+  return stats;
+}
+
+function usePublicStats() {
+  const CACHE_KEY = "pb_public_stats_cache";
+  const [stats, setStats] = useState<PublicStats | null>(() => {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null"); } catch { return null; }
+  });
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/clients/public-stats`, { cache: "no-store" })
+      .then(r => r.json())
+      .then((d: PublicStats) => {
         setStats(d);
         localStorage.setItem(CACHE_KEY, JSON.stringify(d));
       })
@@ -117,11 +142,31 @@ const useCases = [
 
 export default function Landing() {
   const platformStats = usePlatformStats();
+  const publicStats = usePublicStats();
+
+  // Real validated/published records come from the dedicated public-stats
+  // endpoint (SUM of active dataset record counts). Fall back to the broader
+  // task-response count, then to a loading placeholder.
+  const validatedValue =
+    publicStats && publicStats.validatedRecords > 0
+      ? fmtNum(publicStats.validatedRecords)
+      : platformStats
+        ? fmtNum(platformStats.totalTasks)
+        : "—";
+
+  const datasetsValue =
+    publicStats != null
+      ? String(publicStats.totalDatasets)
+      : platformStats
+        ? String(platformStats.totalDatasets)
+        : "—";
+
+  const hasStats = publicStats != null || platformStats != null;
 
   const statsDisplay = [
     {
-      label: "Task Validati",
-      value: platformStats ? fmtNum(platformStats.totalTasks) : "—",
+      label: "Record Validati",
+      value: validatedValue,
     },
     {
       label: "Contributori Attivi",
@@ -129,11 +174,11 @@ export default function Landing() {
     },
     {
       label: "Dataset Disponibili",
-      value: platformStats ? String(platformStats.totalDatasets) : "—",
+      value: datasetsValue,
     },
     {
       label: "Accuratezza Media",
-      value: "99.1%",
+      value: platformStats ? `${platformStats.avgAccuracy}%` : "99.1%",
     },
   ];
 
@@ -183,7 +228,7 @@ export default function Landing() {
         <div className="mx-auto grid max-w-7xl grid-cols-2 divide-x divide-border lg:grid-cols-4">
           {statsDisplay.map((s) => (
             <div key={s.label} className="px-8 py-10 text-center">
-              <p className={`text-3xl font-bold text-primary transition-all ${platformStats ? "" : "opacity-40"}`}>
+              <p className={`text-3xl font-bold text-primary transition-all ${hasStats ? "" : "opacity-40"}`}>
                 {s.value}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">{s.label}</p>

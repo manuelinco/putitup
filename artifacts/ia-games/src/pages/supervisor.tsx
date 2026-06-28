@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CheckCircle, Eye, Shield, Loader2, RefreshCw, Inbox, Plus, X, RotateCcw } from "lucide-react";
+import { CheckCircle, Eye, Shield, Loader2, RefreshCw, Inbox, Plus, X, RotateCcw, Flag, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { API_BASE } from "@/lib/api";
 
@@ -35,7 +35,19 @@ interface TaskReview {
   supervisorApprovedAt: string | null;
 }
 
-type Tab = "controller" | "admin" | "basket";
+interface ReportItem {
+  id: number;
+  taskId: number;
+  datasetId: number | null;
+  reporterUserId: number | null;
+  reason: string;
+  note: string | null;
+  questionSnapshot: string | null;
+  status: string;
+  createdAt: string;
+}
+
+type Tab = "controller" | "admin" | "basket" | "reports";
 
 export default function Controller() {
   const { user } = useAuth();
@@ -47,6 +59,8 @@ export default function Controller() {
   const [approving, setApproving] = useState<number | null>(null);
   const [adminApproving, setAdminApproving] = useState<number | null>(null);
   const [tab, setTab] = useState<Tab>("controller");
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [resolvingReport, setResolvingReport] = useState<number | null>(null);
 
   // Basket state
   const [relabelInputs, setRelabelInputs] = useState<Record<number, string>>({});
@@ -64,10 +78,17 @@ export default function Controller() {
       setTasks(sv ?? []);
       setAdminTasks(ad ?? []);
       setBasketTasks(bk ?? []);
+      if (user?.id) {
+        const rp = await apiFetch(
+          `/api/tasks/reports?status=pending&reviewerUserId=${user.id}`,
+        ).catch(() => null);
+        const list = Array.isArray(rp) ? rp : (rp?.reports ?? []);
+        setReports(list);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadTasks();
@@ -127,6 +148,22 @@ export default function Controller() {
     }
   };
 
+  const handleResolveReport = async (reportId: number, status: "approved" | "rejected") => {
+    if (!user) return;
+    setResolvingReport(reportId);
+    try {
+      await apiFetch(`/api/tasks/reports/${reportId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, reviewerUserId: user.id }),
+      });
+      setReports((prev) => prev.filter((r) => r.id !== reportId));
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setResolvingReport(null);
+    }
+  };
+
   // Basket helpers
   const addTag = (taskId: number) => {
     const input = (relabelInputs[taskId] ?? "").trim();
@@ -170,6 +207,7 @@ export default function Controller() {
     { key: "controller", label: "Controller", count: tasks.length },
     { key: "admin", label: "Admin", count: adminTasks.length },
     { key: "basket", label: "Basket", count: basketTasks.length },
+    { key: "reports", label: "Segnalazioni", count: reports.length },
   ];
 
   const displayTasks = tab === "controller" ? tasks : tab === "admin" ? adminTasks : basketTasks;
@@ -196,7 +234,7 @@ export default function Controller() {
         </div>
 
         {/* Tab switcher */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {tabs.map(({ key, label, count }) => (
             <button
               key={key}
@@ -211,6 +249,7 @@ export default function Controller() {
               )}
             >
               {key === "basket" && <Inbox className="w-3 h-3 inline mr-1" />}
+              {key === "reports" && <Flag className="w-3 h-3 inline mr-1" />}
               {label}
               <span className={cn(
                 "ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-black",
@@ -231,6 +270,79 @@ export default function Controller() {
               <Skeleton key={i} className="h-32 rounded-xl" />
             ))}
           </div>
+        ) : tab === "reports" ? (
+          // ── Reported tasks basket ──────────────────────────────────────
+          reports.length === 0 ? (
+            <Card className="border-border/40 text-center">
+              <CardContent className="p-8 space-y-2">
+                <Flag className="w-10 h-10 text-secondary mx-auto" />
+                <p className="font-black">Nessuna segnalazione</p>
+                <p className="text-xs text-muted-foreground">
+                  Le domande segnalate come errate dagli operatori appariranno qui.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-[11px] text-muted-foreground px-1">
+                Domande segnalate come errate dagli operatori. Conferma per chiudere la segnalazione, oppure ignorala.
+              </p>
+              {reports.map((rep) => {
+                const isResolving = resolvingReport === rep.id;
+                return (
+                  <Card key={rep.id} className="border-destructive/30 bg-destructive/5">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px] uppercase border-destructive/40 text-destructive">
+                            {rep.reason === "wrong_question" ? "Domanda errata" : rep.reason}
+                          </Badge>
+                          {rep.datasetId != null && (
+                            <Badge variant="outline" className="text-[9px] text-accent border-accent/40">
+                              DS #{rep.datasetId}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-[9px] text-muted-foreground border-border/40">
+                            Task #{rep.taskId}
+                          </Badge>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono">#{rep.id}</span>
+                      </div>
+
+                      <p className="text-sm font-bold leading-snug">
+                        {rep.questionSnapshot ?? "(nessun testo della domanda salvato)"}
+                      </p>
+                      {rep.note && (
+                        <p className="text-[11px] text-muted-foreground italic">Nota: {rep.note}</p>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          className="h-10 font-bold text-sm bg-secondary hover:bg-secondary/90"
+                          onClick={() => handleResolveReport(rep.id, "approved")}
+                          disabled={isResolving}
+                        >
+                          {isResolving ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> ...</>
+                          ) : (
+                            <><CheckCircle className="w-4 h-4 mr-2" /> Conferma</>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-10 font-bold text-sm border-border/50"
+                          onClick={() => handleResolveReport(rep.id, "rejected")}
+                          disabled={isResolving}
+                        >
+                          <Ban className="w-4 h-4 mr-2" /> Ignora
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )
         ) : displayTasks.length === 0 ? (
           <Card className="border-border/40 text-center">
             <CardContent className="p-8 space-y-2">

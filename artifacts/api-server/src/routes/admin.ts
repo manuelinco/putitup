@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
-import { eq, desc, and, gte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, ilike, sql } from "drizzle-orm";
 import {
   db,
   usersTable,
@@ -9,7 +9,6 @@ import {
   datasetsTable,
   rewardLedgerTable,
   pendingPaymentsTable,
-  lotteryDrawsTable,
   adsTrackingTable,
 } from "@workspace/db";
 import { requireAdmin } from "../middleware/requireAdmin";
@@ -157,49 +156,6 @@ router.post("/admin/datasets/:id/approve-publish", requireAdmin, async (req, res
     .where(eq(datasetsTable.id, id))
     .returning();
 
-  let lotteryResult = null;
-  if (dataset.lotteryPool > 0 && dataset.lotteryWinners > 0) {
-    const contributors = await db
-      .select({ userId: taskResponsesTable.userId })
-      .from(taskResponsesTable)
-      .innerJoin(tasksTable, eq(taskResponsesTable.taskId, tasksTable.id))
-      .where(eq(tasksTable.datasetId, id))
-      .groupBy(taskResponsesTable.userId);
-
-    if (contributors.length > 0) {
-      const winnerCount = Math.min(dataset.lotteryWinners, contributors.length);
-      const indices = new Set<number>();
-      while (indices.size < winnerCount) {
-        indices.add(crypto.randomInt(0, contributors.length));
-      }
-      const winners = [...indices].map((i) => contributors[i]);
-      const prizePerWinner = dataset.lotteryPool / winnerCount;
-
-      for (const winner of winners) {
-        await db.insert(rewardLedgerTable).values({
-          userId: winner.userId,
-          datasetId: id,
-          role: "lottery_winner",
-          rewardType: "lottery",
-          amountTon: prizePerWinner,
-          pointsValue: Math.round(prizePerWinner * 1000000),
-          status: "approved",
-        });
-      }
-
-      const [draw] = await db.insert(lotteryDrawsTable).values({
-        datasetId: id,
-        prizePoolTon: dataset.lotteryPool,
-        winnersCount: winnerCount,
-        winners: winners.map((w) => w.userId),
-        totalContributors: contributors.length,
-      }).returning();
-
-      await db.update(datasetsTable).set({ lotteryDrawnAt: new Date() }).where(eq(datasetsTable.id, id));
-      lotteryResult = draw;
-    }
-  }
-
   const collaborators = await db
     .select({ userId: taskResponsesTable.userId })
     .from(taskResponsesTable)
@@ -226,7 +182,7 @@ router.post("/admin/datasets/:id/approve-publish", requireAdmin, async (req, res
     }
   }
 
-  res.json({ dataset: updated, lotteryResult, pendingPaymentsCreated: collaborators.length });
+  res.json({ dataset: updated, pendingPaymentsCreated: collaborators.length });
 });
 
 router.get("/admin/stats", requireAdmin, async (_req, res): Promise<void> => {
@@ -342,6 +298,119 @@ router.patch("/admin/users/:id/block", requireAdmin, async (req, res): Promise<v
     .returning();
 
   res.json({ success: true, userId: id, blocked: block, tracking: updated });
+});
+
+/**
+ * GET /api/admin/users?search=
+ * Admin-only user directory used by the role-management UI. Returns the role
+ * flags (isSupervisor / isModerator / isAdmin) so the admin can promote/demote.
+ */
+router.get("/admin/users", requireAdmin, async (req, res): Promise<void> => {
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const base = db
+    .select({
+      id: usersTable.id,
+      username: usersTable.username,
+      telegramId: usersTable.telegramId,
+      points: usersTable.points,
+      level: usersTable.level,
+      isAdmin: usersTable.isAdmin,
+      isSupervisor: usersTable.isSupervisor,
+      isModerator: usersTable.isModerator,
+    })
+    .from(usersTable)
+    .$dynamic();
+
+  const rows = await (search
+    ? base.where(ilike(usersTable.username, `%${search}%`))
+    : base
+  )
+    .orderBy(desc(usersTable.createdAt))
+    .limit(50);
+
+  res.json(rows);
+});
+
+/**
+ * POST /api/admin/users/:id/role
+ * Body: { role: "supervisor" | "moderator" | "none", value?: boolean }
+ * Promote/demote a user. `supervisor`/`moderator` set the corresponding flag to
+ * `value` (default true); `none` clears both elevated roles.
+ */
+router.post("/admin/users/:id/role", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  const role = String(req.body?.role ?? "");
+  const value = req.body?.value === undefined ? true : Boolean(req.body.value);
+
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid user ID" });
+    return;
+  }
+  if (role !== "supervisor" && role !== "moderator" && role !== "none") {
+    res.status(400).json({ error: "role must be 'supervisor', 'moderator' or 'none'" });
+    return;
+  }
+
+  const set: { isSupervisor?: boolean; isModerator?: boolean } = {};
+  if (role === "supervisor") set.isSupervisor = value;
+  else if (role === "moderator") set.isModerator = value;
+  else {
+    set.isSupervisor = false;
+    set.isModerator = false;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(set)
+    .where(eq(usersTable.id, id))
+    .returning({
+      id: usersTable.id,
+      username: usersTable.username,
+      isAdmin: usersTable.isAdmin,
+      isSupervisor: usersTable.isSupervisor,
+      isModerator: usersTable.isModerator,
+    });
+
+  if (!updated) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json({ success: true, user: updated });
+});
+
+const ANTIBOT_CONFIG = {
+  dailyAdCap: 20,
+  adCooldownSeconds: 30,
+  minAdSeconds: 10,
+  riskBlockThreshold: RISK_BLOCK,
+  flagThreshold: 50,
+};
+
+/**
+ * GET /api/admin/antibot-config
+ * Returns the live anti-bot policy values plus real-time aggregates from the
+ * ads-tracking table (how many users are tracked / flagged / blocked).
+ */
+router.get("/admin/antibot-config", requireAdmin, async (_req, res): Promise<void> => {
+  const [tracked] = await db.select({ count: sql<number>`count(*)::int` }).from(adsTrackingTable);
+  const [blocked] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(adsTrackingTable)
+    .where(gte(adsTrackingTable.riskScore, ANTIBOT_CONFIG.riskBlockThreshold));
+  const [flagged] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(adsTrackingTable)
+    .where(gte(adsTrackingTable.riskScore, ANTIBOT_CONFIG.flagThreshold));
+
+  res.json({
+    config: ANTIBOT_CONFIG,
+    stats: {
+      tracked: tracked?.count ?? 0,
+      blocked: blocked?.count ?? 0,
+      flagged: flagged?.count ?? 0,
+    },
+  });
 });
 
 export default router;

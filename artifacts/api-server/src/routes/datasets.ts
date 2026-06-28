@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, ilike, and } from "drizzle-orm";
-import { db, datasetsTable, activityEventsTable, usersTable, tasksTable, taskResponsesTable, rewardLedgerTable, lotteryDrawsTable } from "@workspace/db";
+import { db, datasetsTable, activityEventsTable, usersTable, tasksTable } from "@workspace/db";
+import { requireAdmin } from "../middleware/requireAdmin";
 import {
   ListDatasetsQueryParams,
   CreateDatasetBody,
@@ -57,7 +58,7 @@ router.get("/datasets", async (req, res): Promise<void> => {
   res.json(datasets);
 });
 
-router.post("/datasets", async (req, res): Promise<void> => {
+router.post("/datasets", requireAdmin, async (req, res): Promise<void> => {
   const {
     name,
     description,
@@ -354,63 +355,170 @@ router.patch("/datasets/:id", async (req, res): Promise<void> => {
   res.json(dataset);
 });
 
-router.post("/datasets/:id/lottery/draw", async (req, res): Promise<void> => {
+/**
+ * POST /api/datasets/:id/minipimer/push
+ * MINIPIMER: pushes the consensus-validated cluster of a dataset into the
+ * Business catalog. Counts the dataset's approved tasks (those with a
+ * final_label set), bumps the published record count, and marks the dataset
+ * as published so the Business site reflects the new validated records.
+ * Idempotent: the record count only grows by the number of newly-approved
+ * tasks since the previous push (never decreases).
+ */
+router.post("/datasets/:id/minipimer/push", requireAdmin, async (req, res): Promise<void> => {
   const id = Number(req.params["id"]);
-  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid dataset ID" });
+    return;
+  }
 
   const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, id));
-  if (!dataset) { res.status(404).json({ error: "Dataset not found" }); return; }
-  if (!dataset.lotteryPool || dataset.lotteryPool <= 0) {
-    res.status(400).json({ error: "Dataset has no lottery pool configured" }); return;
-  }
-  if (dataset.lotteryDrawnAt) {
-    res.status(409).json({ error: "Lottery already drawn for this dataset" }); return;
+  if (!dataset) {
+    res.status(404).json({ error: "Dataset not found" });
+    return;
   }
 
-  const contributors = await db
-    .select({ userId: taskResponsesTable.userId })
-    .from(taskResponsesTable)
-    .innerJoin(tasksTable, eq(taskResponsesTable.taskId, tasksTable.id))
-    .where(eq(tasksTable.datasetId, id))
-    .groupBy(taskResponsesTable.userId);
+  // Data-safe push: run inside a transaction, re-read the dataset row, and count
+  // ONLY admin-approved tasks (reviewStage = 'published'). approvedRecordCount is
+  // the high-water mark, so re-running the push never double-counts: we add only
+  // the delta of newly-approved records to the Business-facing recordCount.
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(datasetsTable)
+      .where(eq(datasetsTable.id, id));
 
-  if (contributors.length === 0) {
-    res.status(400).json({ error: "No contributors for this dataset yet" }); return;
-  }
+    const [{ c: approved }] = await tx
+      .select({ c: sql<number>`count(*)::int` })
+      .from(tasksTable)
+      .where(and(eq(tasksTable.datasetId, id), eq(tasksTable.reviewStage, "published")));
 
-  const winnerCount = Math.min(dataset.lotteryWinners ?? 1, contributors.length);
-  const indices = new Set<number>();
-  while (indices.size < winnerCount) {
-    indices.add(Math.floor(Math.random() * contributors.length));
-  }
-  const winnerUserIds = [...indices].map((i) => contributors[i]!.userId);
-  const prizePerWinner = dataset.lotteryPool / winnerCount;
+    if (approved === 0) {
+      return { empty: true as const, approvedCount: 0, delta: 0, updated: current };
+    }
 
-  const winnerDetails: { userId: number; username: string; amountTon: number }[] = [];
-  for (const userId of winnerUserIds) {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-    await db.insert(rewardLedgerTable).values({
-      userId,
-      datasetId: id,
-      role: "lottery_winner",
-      rewardType: "lottery",
-      amountTon: prizePerWinner,
-      pointsValue: Math.round(prizePerWinner * 1_000_000),
-      status: "approved",
-    });
-    winnerDetails.push({ userId, username: user?.username ?? `user#${userId}`, amountTon: prizePerWinner });
-  }
+    const prevApproved = current.approvedRecordCount ?? 0;
+    const d = Math.max(0, approved - prevApproved);
+    const [row] = await tx
+      .update(datasetsTable)
+      .set({
+        approvedRecordCount: approved,
+        recordCount: (current.recordCount ?? 0) + d,
+        status: "published",
+        nightlyPublishedAt: new Date(),
+      })
+      .where(eq(datasetsTable.id, id))
+      .returning();
 
-  await db.insert(lotteryDrawsTable).values({
-    datasetId: id,
-    prizePoolTon: dataset.lotteryPool,
-    winnersCount: winnerCount,
-    winners: winnerUserIds,
-    totalContributors: contributors.length,
+    return { empty: false as const, approvedCount: approved, delta: d, updated: row };
   });
-  await db.update(datasetsTable).set({ lotteryDrawnAt: new Date() }).where(eq(datasetsTable.id, id));
 
-  res.json({ prizePoolTon: dataset.lotteryPool, winnersCount: winnerCount, winners: winnerDetails, totalContributors: contributors.length });
+  if (result.empty) {
+    res.status(400).json({ error: "Nessun task approvato (admin-approvato) da pubblicare per questo dataset." });
+    return;
+  }
+
+  const { updated, approvedCount, delta } = result;
+  req.log.info({ datasetId: id, approvedCount, pushed: delta }, "minipimer_push");
+
+  res.json({
+    datasetId: id,
+    name: updated.name,
+    approvedTasks: approvedCount,
+    pushed: delta,
+    recordCount: updated.recordCount,
+    approvedRecordCount: updated.approvedRecordCount,
+    status: updated.status,
+  });
+});
+
+/**
+ * GET /api/datasets/minipimer/summary
+ * Per-dataset MINIPIMER overview for the admin panel: how many materialized
+ * tasks exist and how many are approved (final_label set), so the admin can
+ * see which datasets are ready to export / push.
+ */
+router.get("/datasets/minipimer/summary", requireAdmin, async (_req, res): Promise<void> => {
+  const datasets = await db.select().from(datasetsTable).orderBy(desc(datasetsTable.id));
+
+  const approvedRows = await db
+    .select({ datasetId: tasksTable.datasetId, c: sql<number>`count(*)::int` })
+    .from(tasksTable)
+    .where(eq(tasksTable.reviewStage, "published"))
+    .groupBy(tasksTable.datasetId);
+  const totalRows = await db
+    .select({ datasetId: tasksTable.datasetId, c: sql<number>`count(*)::int` })
+    .from(tasksTable)
+    .groupBy(tasksTable.datasetId);
+
+  const approvedByDs = new Map<number, number>();
+  for (const r of approvedRows) if (r.datasetId != null) approvedByDs.set(r.datasetId, r.c);
+  const totalByDs = new Map<number, number>();
+  for (const r of totalRows) if (r.datasetId != null) totalByDs.set(r.datasetId, r.c);
+
+  const summary = datasets.map((ds) => {
+    const approvedTasks = approvedByDs.get(ds.id) ?? 0;
+    return {
+      id: ds.id,
+      name: ds.name,
+      category: ds.category,
+      status: ds.status,
+      approvedTasks,
+      totalTasks: totalByDs.get(ds.id) ?? 0,
+      readyToExport: approvedTasks > 0,
+    };
+  });
+
+  res.json(summary);
+});
+
+/**
+ * GET /api/datasets/:id/minipimer?format=jsonl|json
+ * Download the consensus-validated records of a dataset (approved tasks with a
+ * final_label) as JSONL or JSON for delivery to Business clients.
+ */
+router.get("/datasets/:id/minipimer", requireAdmin, async (req, res): Promise<void> => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid dataset ID" });
+    return;
+  }
+  const format = req.query["format"] === "json" ? "json" : "jsonl";
+
+  const [dataset] = await db.select().from(datasetsTable).where(eq(datasetsTable.id, id));
+  if (!dataset) {
+    res.status(404).json({ error: "Dataset not found" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id: tasksTable.id,
+      type: tasksTable.type,
+      dataPayload: tasksTable.dataPayload,
+      label: tasksTable.finalLabel,
+      consensusCount: tasksTable.consensusCount,
+    })
+    .from(tasksTable)
+    .where(and(eq(tasksTable.datasetId, id), eq(tasksTable.reviewStage, "published")));
+
+  const records = rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    input: r.dataPayload,
+    label: r.label,
+    consensusCount: r.consensusCount,
+  }));
+
+  const safe = dataset.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+  if (format === "json") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="minipimer_${safe}_${id}.json"`);
+    res.send(JSON.stringify({ dataset: dataset.name, count: records.length, records }, null, 2));
+    return;
+  }
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="minipimer_${safe}_${id}.jsonl"`);
+  res.send(records.map((r) => JSON.stringify(r)).join("\n"));
 });
 
 router.post("/datasets/:id/download", async (req, res): Promise<void> => {

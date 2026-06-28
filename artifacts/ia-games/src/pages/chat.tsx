@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/auth";
 import { API_BASE } from "@/lib/api";
-import { Send, MessageCircle, Lock } from "lucide-react";
+import { getSessionToken } from "@/lib/session";
+import { Send, MessageCircle, Lock, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -15,12 +16,20 @@ interface ChatMsg {
 
 const POLL_INTERVAL = 4000;
 
+function authHeaders(): Record<string, string> {
+  const token = getSessionToken();
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  return h;
+}
+
 export default function Chat() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canModerate, setCanModerate] = useState<boolean>(!!user?.isAdmin);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -41,6 +50,20 @@ export default function Chat() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [user]);
 
+  // Resolve the current user's moderation role (admin or appointed moderator).
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setCanModerate(!!user.isAdmin);
+    fetch(`${API_BASE}/api/users/${user.id}`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (active && u) setCanModerate(Boolean(u.isAdmin || u.isModerator));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [user?.id]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -55,7 +78,7 @@ export default function Chat() {
     try {
       const res = await fetch(`${API_BASE}/api/chat/messages`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({ userId: user.id, content }),
       });
       const data = await res.json().catch(() => ({}));
@@ -66,6 +89,27 @@ export default function Chat() {
       setText(content);
     } finally {
       setSending(false);
+    }
+  };
+
+  const deleteMessage = async (id: number) => {
+    if (!user) return;
+    const prev = messages;
+    setMessages((m) => m.filter((msg) => msg.id !== id));
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/messages/${id}?userId=${user.id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (!res.ok) {
+        setMessages(prev);
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Impossibile eliminare il messaggio");
+      }
+    } catch {
+      setMessages(prev);
+      setError("Errore di connessione");
     }
   };
 
@@ -107,6 +151,7 @@ export default function Chat() {
         )}
         {messages.map((msg) => {
           const isMine = msg.userId === user.id;
+          const canDelete = isMine || canModerate;
           return (
             <div key={msg.id} className={`flex gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
               {/* Avatar */}
@@ -125,7 +170,19 @@ export default function Chat() {
                 }`}>
                   {msg.content}
                 </div>
-                <span className="text-[9px] text-muted-foreground px-1">{formatTime(msg.createdAt)}</span>
+                <div className={`flex items-center gap-2 px-1 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+                  <span className="text-[9px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => deleteMessage(msg.id)}
+                      aria-label="Elimina messaggio"
+                      className="text-muted-foreground/60 hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );

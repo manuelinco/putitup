@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Activity, BarChart3, Database, Play, RefreshCw,
-  ShieldCheck, Users, Zap,
+  Activity, BarChart3, Database, Mail, Play, RefreshCw,
+  ShieldCheck, ShoppingCart, Users, Zap,
 } from "lucide-react";
 
 interface AgentStatus {
@@ -40,10 +40,46 @@ interface Dataset {
   requestedTaskCount: number;
 }
 
+interface AdminClient {
+  id: number;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  company: string | null;
+  plan: string | null;
+  tokenBalance: number | null;
+  isBlocked: boolean | null;
+  createdAt: string;
+}
+
+interface ContactMessage {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  message: string;
+  createdAt: string;
+}
+
+interface Sale {
+  id: number;
+  method: string;
+  tokensSpent: number | null;
+  amountPaidCents: number | null;
+  status: string;
+  createdAt: string;
+  clientEmail: string | null;
+  clientCompany: string | null;
+  datasetName: string | null;
+}
+
 export function AdminPanel({ apiBase }: { apiBase: string }) {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [clients, setClients] = useState<AdminClient[]>([]);
+  const [messages, setMessages] = useState<ContactMessage[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningAgent, setRunningAgent] = useState(false);
   const [agentMsg, setAgentMsg] = useState<string | null>(null);
@@ -59,10 +95,16 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
       fetch(`${apiBase}/api/admin/stats`, { headers }).then((r) => r.ok ? r.json() : null),
       fetch(`${apiBase}/api/agent/status`).then((r) => r.ok ? r.json() : null),
       fetch(`${apiBase}/api/datasets`).then((r) => r.ok ? r.json() : []),
-    ]).then(([s, a, d]) => {
+      fetch(`${apiBase}/api/clients/admin/list`, { headers }).then((r) => r.ok ? r.json() : []),
+      fetch(`${apiBase}/api/clients/admin/contact-messages`, { headers }).then((r) => r.ok ? r.json() : []),
+      fetch(`${apiBase}/api/clients/admin/sales`, { headers }).then((r) => r.ok ? r.json() : []),
+    ]).then(([s, a, d, c, m, sl]) => {
       if (s) setStats(s);
       if (a) setAgentStatus(a);
       if (Array.isArray(d)) setDatasets(d);
+      if (Array.isArray(c)) setClients(c);
+      if (Array.isArray(m)) setMessages(m);
+      if (Array.isArray(sl)) setSales(sl);
     }).catch(() => {}).finally(() => setLoading(false));
   };
 
@@ -203,6 +245,109 @@ export function AdminPanel({ apiBase }: { apiBase: string }) {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Business clients */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary" /> Clienti business ({clients.length})
+          </h3>
+        </CardHeader>
+        <CardContent className="p-0">
+          {clients.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted-foreground">Nessun cliente registrato.</p>
+          ) : (
+            <div className="divide-y divide-border max-h-80 overflow-y-auto">
+              {clients.map((c) => (
+                <div key={c.id} className="flex items-center justify-between px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-none truncate">
+                      {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                      {c.email}{c.company ? ` · ${c.company}` : ""} · {(c.tokenBalance ?? 0).toLocaleString("it-IT")} token
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {c.isBlocked && (
+                      <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">Bloccato</Badge>
+                    )}
+                    <Badge variant="outline" className="text-[10px] border-primary/40 text-primary uppercase">
+                      {c.plan ?? "free"}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sales / dataset access */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <h3 className="font-semibold flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4 text-primary" /> Vendite & accessi ({sales.length})
+          </h3>
+        </CardHeader>
+        <CardContent className="p-0">
+          {sales.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted-foreground">Nessuna vendita registrata.</p>
+          ) : (
+            <div className="divide-y divide-border max-h-80 overflow-y-auto">
+              {sales.map((s) => (
+                <div key={s.id} className="flex items-center justify-between px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-none truncate">{s.datasetName ?? "Dataset"}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                      {s.clientEmail ?? "—"}{s.clientCompany ? ` · ${s.clientCompany}` : ""} · {new Date(s.createdAt).toLocaleDateString("it-IT")}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold">
+                      {s.method === "tokens"
+                        ? `${(s.tokensSpent ?? 0).toLocaleString("it-IT")} token`
+                        : `€${((s.amountPaidCents ?? 0) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2 })}`}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground uppercase">{s.status}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Contact messages */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-2">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Mail className="h-4 w-4 text-primary" /> Messaggi di contatto ({messages.length})
+          </h3>
+        </CardHeader>
+        <CardContent className="p-0">
+          {messages.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted-foreground">Nessun messaggio ricevuto.</p>
+          ) : (
+            <div className="divide-y divide-border max-h-96 overflow-y-auto">
+              {messages.map((m) => (
+                <div key={m.id} className="px-5 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium leading-none truncate">
+                      {m.name}{m.company ? ` · ${m.company}` : ""}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {new Date(m.createdAt).toLocaleString("it-IT")}
+                    </span>
+                  </div>
+                  <a href={`mailto:${m.email}`} className="text-[10px] text-primary hover:underline">{m.email}</a>
+                  <p className="text-xs text-muted-foreground mt-1.5 whitespace-pre-wrap">{m.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

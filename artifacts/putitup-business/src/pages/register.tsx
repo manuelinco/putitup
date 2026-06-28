@@ -154,6 +154,14 @@ export default function Register() {
         return;
       }
 
+      // If this email already had an account, the verify step logs the user in
+      // directly (returns a session token + client). Honour that instead of
+      // failing on a duplicate-account error during /register.
+      if (verifyData.token && verifyData.client) {
+        finishSession(verifyData);
+        return;
+      }
+
       // OTP valid — create account with all collected data
       const regRes = await fetch(`${API_BASE}/api/auth/otp/register`, {
         method: "POST",
@@ -173,31 +181,43 @@ export default function Register() {
         }),
       });
       const regData = await regRes.json().catch(() => ({}));
-      if (!regRes.ok) { setError(regData.error ?? "Errore registrazione"); return; }
+      if (!regRes.ok) { setError(regData.error ?? "Errore durante la registrazione — riprova"); return; }
+      if (!regData.token || !regData.client) {
+        setError("Risposta del server non valida — riprova tra poco");
+        return;
+      }
 
-      localStorage.setItem("pb_session_token", regData.token);
-      localStorage.setItem("pb_client_id", String(regData.client.id));
-      localStorage.setItem("pb_client_email", regData.client.email);
-      localStorage.setItem("pb_client_name", `${regData.client.firstName} ${regData.client.lastName}`);
-      localStorage.setItem("pb_client_company", regData.client.company ?? "");
-      // Server always creates accounts on 'free' — paid plans require payment.
-      localStorage.setItem("pb_client_plan", regData.client?.plan ?? "free");
-      window.dispatchEvent(new Event("storage"));
-      setSuccess(true);
-      // If a paid plan was selected, send the user to checkout to complete payment.
-      const wantsPaid = form.plan === "starter" || form.plan === "business";
-      setTimeout(() => {
-        if (wantsPaid) {
-          window.location.href = `/putitup-business/pricing?plan=${form.plan}&checkout=start`;
-        } else {
-          navigate("/dashboard");
-        }
-      }, 2500);
+      finishSession(regData);
     } catch {
       setError("Errore di connessione — riprova");
     } finally {
       setLoading(false);
     }
+  };
+
+  const finishSession = (data: any) => {
+    localStorage.setItem("pb_session_token", data.token);
+    localStorage.setItem("pb_client_id", String(data.client.id));
+    localStorage.setItem("pb_client_email", data.client.email);
+    localStorage.setItem(
+      "pb_client_name",
+      `${data.client.firstName ?? ""} ${data.client.lastName ?? ""}`.trim()
+    );
+    localStorage.setItem("pb_client_company", data.client.company ?? "");
+    // Server always creates accounts on 'free' — paid plans require payment.
+    localStorage.setItem("pb_client_plan", data.client?.plan ?? "free");
+    localStorage.removeItem("pb_is_admin");
+    window.dispatchEvent(new Event("storage"));
+    setSuccess(true);
+    // If a paid plan was selected, send the user to checkout to complete payment.
+    const wantsPaid = form.plan === "starter" || form.plan === "business";
+    setTimeout(() => {
+      if (wantsPaid) {
+        window.location.href = `/putitup-business/pricing?plan=${form.plan}&checkout=start`;
+      } else {
+        navigate("/dashboard");
+      }
+    }, 2500);
   };
 
   if (success) {

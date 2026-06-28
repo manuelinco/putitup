@@ -1,7 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Database, LayoutDashboard, LogIn, LogOut, Menu, User, X, Zap } from "lucide-react";
+import { LayoutDashboard, LogIn, LogOut, Menu, User, X } from "lucide-react";
 import { useState } from "react";
 import { useBusinessAuth } from "@/hooks/useBusinessAuth";
 
@@ -23,9 +22,6 @@ export default function Nav() {
           <span className="text-lg font-bold tracking-tight text-foreground">
             PUTITUP<span className="text-primary"> Business</span>
           </span>
-          <Badge variant="secondary" className="hidden text-[10px] sm:inline-flex">
-            Enterprise
-          </Badge>
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
