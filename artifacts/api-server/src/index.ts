@@ -89,6 +89,32 @@ async function runAppMigrations() {
     }
   }
 
+  // Community chat table. Isolated & idempotent — the Mini App community chat
+  // (POST /chat/messages) depends on it. Applied on every boot because we have no
+  // direct psql access to production (Neon). Without this the INSERT throws and the
+  // client shows "Chat unavailable", and rapid retries then trip the rate limiter
+  // ("Troppo veloce"). Mirrors lib/db chat_messages schema exactly.
+  {
+    const c = await pool.connect();
+    try {
+      await c.query(`
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          id         serial PRIMARY KEY,
+          user_id    integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          username   text NOT NULL,
+          content    text NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS chat_messages_created_idx ON chat_messages (created_at);
+      `);
+      logger.info("chat_messages migration OK");
+    } catch (err) {
+      logger.error({ err }, "chat_messages migration FAILED — community chat unavailable");
+    } finally {
+      c.release();
+    }
+  }
+
   // Legacy idempotent schema (enum values + columns). Non-fatal.
   {
     const client = await pool.connect();
