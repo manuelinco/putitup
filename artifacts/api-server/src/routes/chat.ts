@@ -132,7 +132,6 @@ router.post("/chat/messages", requireUser, async (req, res): Promise<void> => {
       res.status(429).json({ error: "Troppo veloce — aspetta un momento" });
       return;
     }
-    lastMessageTimes.set(uid, now);
 
     const [user] = await db.select({ username: usersTable.username })
       .from(usersTable).where(eq(usersTable.id, uid)).limit(1);
@@ -147,6 +146,10 @@ router.post("/chat/messages", requireUser, async (req, res): Promise<void> => {
       content: msg,
     }).returning();
 
+    // Only count successfully-sent messages toward the rate limit, so a failed
+    // send (db error / user lookup) never makes the next attempt show "Troppo
+    // veloce". (This cascade is what the owner saw after each "Chat unavailable".)
+    lastMessageTimes.set(uid, now);
     res.status(201).json({ message: saved });
   } catch (err) {
     req.log?.error({ err }, "chat: failed to post message");
