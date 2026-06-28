@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { adsChallenge, useWatchAd } from "@workspace/api-client-react";
 import { useAdsgram } from "@/hooks/use-adsgram";
+import { isTelegramApp } from "@/hooks/useTelegram";
 import { HumanCheck } from "@/components/human-check";
 import { AdChallenge } from "@/components/ad-challenge";
 
@@ -85,13 +86,19 @@ export function RewardedAdFlow({
     }
 
     startRef.current = Date.now();
-    const shown = await showAd();
-    if (shown) {
+    const result = await showAd();
+    if (result === "shown") {
+      // A real Adsgram ad was watched to completion.
       await submitWatch();
-    } else {
-      // SDK not available (preview / outside Telegram) -> verified in-app ad.
+    } else if (result === "sdk_missing" && !isTelegramApp()) {
+      // Browser preview / outside Telegram: use the in-app verified ad so the
+      // flow stays testable. This NEVER runs inside the Telegram client.
       startRef.current = Date.now();
       setPhase("fallback");
+    } else {
+      // Inside Telegram but Adsgram returned no ad (no fill / closed early):
+      // be honest — no fake ad and no reward.
+      onFail("no_ad");
     }
   };
 

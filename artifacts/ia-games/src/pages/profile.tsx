@@ -130,8 +130,11 @@ export default function Profile() {
     refreshUser();
   };
 
-  const handleAdFail = () => {
+  const handleAdFail = (reason: string) => {
     setShowAdChallenge(false);
+    if (reason === "no_ad") {
+      alert("Nessuna pubblicità disponibile in questo momento. Riprova tra poco.");
+    }
   };
 
   const isLoading = userLoading || statsLoading;

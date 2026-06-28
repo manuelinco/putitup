@@ -226,6 +226,9 @@ export default function Tasks() {
         setSubmitError("Il tuo account è sotto revisione anti-bot. Contatta il supporto.");
         applyBotPenalty();
         break;
+      case "no_ad":
+        setSubmitError("Nessuna pubblicità disponibile in questo momento. Riprova tra poco.");
+        break;
       default:
         // human_failed / invalid_completion / error -> bot-like, apply penalty
         applyBotPenalty();
